@@ -37,6 +37,7 @@ add_executable(${TP_TARGET}
     ${TP_QRC}
     src/main.cpp
     src/mainwindow.cpp
+    src/archiveimport.cpp
     src/gamesettings.cpp
     src/gamedetect.cpp
     src/launcher.cpp

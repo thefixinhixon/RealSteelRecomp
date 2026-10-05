@@ -6,11 +6,13 @@
 #include "launcher.h"
 #include "platform.h"
 #include "stfs/stfspackage.h"
+#include "archiveimport.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -97,7 +99,7 @@ MainWindow::MainWindow(QWidget *parent)
     rootLabel_->setWordWrap(true);
     playButton_ = new QPushButton(QStringLiteral("PLAY"), gameTab);
     playButton_->setObjectName(QStringLiteral("playButton"));
-    importButton_ = new QPushButton(QStringLiteral("Import XBLA package..."), gameTab);
+    importButton_ = new QPushButton(QStringLiteral("Import XBLA package or archive..."), gameTab);
     commandLabel_ = new QLabel(gameTab);
     commandLabel_->setObjectName(QStringLiteral("commandLabel"));
     commandLabel_->setWordWrap(true);
@@ -536,16 +538,21 @@ void MainWindow::onPlayClicked()
 
 void MainWindow::onImportClicked()
 {
+    QString selectedFilter;
     const QString packagePath = QFileDialog::getOpenFileName(
-        this, QStringLiteral("Select XBLA package"), QDir::homePath(),
-        QStringLiteral("All files (*)"));
+        this, QStringLiteral("Select XBLA package or archive"),
+        QDir::homePath(),
+        QStringLiteral("All files (*);;Archives (*.rar *.zip *.7z)"),
+        &selectedFilter);
     if (packagePath.isEmpty())
         return;
 
-    // Validate on the GUI thread: parsing the header and file table
-    // is a handful of block reads even for large packages, so a bad
-    // file is reported immediately instead of inside the worker.
-    {
+    // Archives (.rar/.zip/.7z around a package or an extracted game
+    // folder) are resolved inside the worker thread -- unpacking can
+    // take a while. Plain packages keep the quick GUI-thread probe so
+    // a bad file is reported immediately.
+    const bool fromArchive = archiveimport::isArchiveFile(packagePath);
+    if (!fromArchive) {
         StfsPackage probe;
         QString error;
         if (!probe.open(packagePath, &error)) {
@@ -586,10 +593,87 @@ void MainWindow::onImportClicked()
     dialog->show();
     importButton_->setEnabled(false);
 
-    QThread *thread = QThread::create([packagePath, dataDir, dialog, result]() {
+    const QString wantTitleId = profile_.titleId;
+    QThread *thread = QThread::create(
+        [packagePath, dataDir, dialog, result, fromArchive, root,
+         wantTitleId]() {
+        QString effectivePkg = packagePath;
+        if (fromArchive) {
+            QMetaObject::invokeMethod(
+                dialog,
+                [dialog]() {
+                    dialog->setLabelText(
+                        QStringLiteral("Unpacking archive..."));
+                },
+                Qt::QueuedConnection);
+            const QString scratch =
+                QDir(root).filePath(QStringLiteral(".import-scratch"));
+            QDir().mkpath(scratch);
+            const archiveimport::Resolved resolved =
+                archiveimport::resolveArchive(packagePath, scratch,
+                                              wantTitleId);
+            if (!resolved.ok) {
+                result->error = resolved.error;
+                return;
+            }
+            if (resolved.kind == QStringLiteral("folder")) {
+                // The archive held an already-extracted game: copy
+                // that folder's CONTENTS into gamedata/.
+                const QString srcRoot = resolved.path;
+                QDir().mkpath(dataDir);
+                qint64 totalFiles = 0;
+                quint64 totalBytes = 0;
+                {
+                    QDirIterator count(
+                        srcRoot, QDir::Files | QDir::NoDotAndDotDot,
+                        QDirIterator::Subdirectories);
+                    while (count.hasNext()) {
+                        count.next();
+                        ++totalFiles;
+                        totalBytes +=
+                            static_cast<quint64>(count.fileInfo().size());
+                    }
+                }
+                qint64 doneFiles = 0;
+                QDirIterator walk(srcRoot,
+                                  QDir::Files | QDir::NoDotAndDotDot,
+                                  QDirIterator::Subdirectories);
+                while (walk.hasNext()) {
+                    const QString src = walk.next();
+                    const QString rel =
+                        QDir(srcRoot).relativeFilePath(src);
+                    const QString dst = QDir(dataDir).filePath(rel);
+                    QDir().mkpath(QFileInfo(dst).absolutePath());
+                    QFile::remove(dst);
+                    if (!QFile::copy(src, dst)) {
+                        result->error = QStringLiteral(
+                                            "Could not copy %1 out of "
+                                            "the archive.")
+                                            .arg(rel);
+                        return;
+                    }
+                    ++doneFiles;
+                    const qint64 d = doneFiles, t = totalFiles;
+                    QMetaObject::invokeMethod(
+                        dialog,
+                        [dialog, d, t, rel]() {
+                            dialog->setMaximum(int(t));
+                            dialog->setValue(int(d));
+                            dialog->setLabelText(
+                                QStringLiteral("Copying %1").arg(rel));
+                        },
+                        Qt::QueuedConnection);
+                }
+                result->files = totalFiles;
+                result->bytes = totalBytes;
+                result->ok = true;
+                return;
+            }
+            effectivePkg = resolved.path;
+        }
         StfsPackage pkg; // Own instance: StfsPackage is not shared
         QString error;
-        if (!pkg.open(packagePath, &error)) {
+        if (!pkg.open(effectivePkg, &error)) {
             result->error = error;
             return;
         }
@@ -619,6 +703,10 @@ void MainWindow::onImportClicked()
     connect(thread, &QThread::finished, this,
             [this, thread, dialog, result, root, baseName]() {
                 thread->deleteLater();
+                // The archive scratch dir (if any) never survives an
+                // import, success or failure.
+                QDir(QDir(root).filePath(QStringLiteral(".import-scratch")))
+                    .removeRecursively();
                 dialog->close();
                 dialog->deleteLater();
                 importButton_->setEnabled(true);
