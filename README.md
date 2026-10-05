@@ -114,6 +114,14 @@ processes: `rm /dev/shm/xenia_memory_*`.
 
 ## Credits & disclosure
 
+Full attribution for every library, tool and asset this project
+uses — ReXGlue SDK, Xenia, Qt, 7-Zip, FidelityFX, FFmpeg, SDL and
+more — lives in **[CREDITS.md](CREDITS.md)**, with license texts in
+**[licenses/](licenses/)**. This project's own code is
+**BSD 3-Clause** (see [LICENSE](LICENSE)), matching the ReXGlue
+SDK's license; the game itself remains © Yuke's / DreamWorks /
+Microsoft and no game data is distributed.
+
 - **Yuke's** — for Real Steel, and for making heavy robots feel heavy.
 - **ReXGlue SDK team and upstream rexglue contributors** — the
   recompiler and runtime that make this possible.
