@@ -1,0 +1,32 @@
+# Game data -- proprietary, never committed. Supply your own copy of
+# the game (XBLA package for title ID 584111E0, or an extracted folder
+# containing default.xex).
+assets/
+*.xex
+*.iso
+*.rar
+
+# Build output
+out/
+bin/
+build/
+build-*/
+*.AppImage
+
+# Compiled binaries and runtime libraries. The game executable and the
+# librex*.so / *.dll runtime set only ever ship as matched release
+# artifacts -- never mix sets, never commit them.
+/realsteel
+/realsteel.exe
+TPFactualMetalLauncher
+TPFactualMetalLauncher.exe
+TPMawLauncher
+TPMawLauncher.exe
+TPSplosionmanLauncher
+TPSplosionmanLauncher.exe
+*.so
+*.dll
+
+# Logs
+*.log
+logs/

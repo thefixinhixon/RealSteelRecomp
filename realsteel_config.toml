@@ -1,0 +1,56 @@
+# Real Steel codegen config - function hints.
+# Targets the analyzer missed on the first pass (from the codegen log).
+
+[functions]
+0x8208C038 = { name = "sub_8208C038" }
+0x8208CDE8 = { name = "sub_8208CDE8" }
+0x8208D0DC = { name = "sub_8208D0DC" }
+0x8208D80C = { name = "sub_8208D80C" }
+0x8208D86C = { name = "sub_8208D86C" }
+0x8208D984 = { name = "sub_8208D984" }
+0x8208D9A0 = { name = "sub_8208D9A0" }
+0x820B8230 = { name = "sub_820B8230" }
+0x820B82F8 = { name = "sub_820B82F8" }
+0x820B8318 = { name = "sub_820B8318" }
+0x820B8330 = { name = "sub_820B8330" }
+0x820B8358 = { name = "sub_820B8358" }
+0x820B836C = { name = "sub_820B836C" }
+0x820B8374 = { name = "sub_820B8374" }
+0x820B8390 = { name = "sub_820B8390" }
+0x820B83A4 = { name = "sub_820B83A4" }
+0x8224913C = { name = "sub_8224913C" }
+0x82249394 = { name = "sub_82249394" }
+0x8224DFAC = { name = "sub_8224DFAC" }
+0x8224E0B8 = { name = "sub_8224E0B8" }
+0x82250F70 = { name = "sub_82250F70" }
+0x82251494 = { name = "sub_82251494" }
+0x82251BAC = { name = "sub_82251BAC" }
+0x82253E50 = { name = "sub_82253E50" }
+0x82253FE8 = { name = "sub_82253FE8" }
+0x8225408C = { name = "sub_8225408C" }
+0x822540A4 = { name = "sub_822540A4" }
+0x82254FF8 = { name = "sub_82254FF8" }
+0x822550F4 = { name = "sub_822550F4" }
+0x82255110 = { name = "sub_82255110" }
+0x82255180 = { name = "sub_82255180" }
+0x8225526C = { name = "sub_8225526C" }
+0x822552A0 = { name = "sub_822552A0" }
+0x82255A78 = { name = "sub_82255A78" }
+0x82255CA0 = { name = "sub_82255CA0" }
+0x82255E48 = { name = "sub_82255E48" }
+0x82256090 = { name = "sub_82256090" }
+0x8227C408 = { name = "sub_8227C408" }
+0x8227C440 = { name = "sub_8227C440" }
+0x822F51A8 = { name = "sub_822F51A8" }
+0x822F51D4 = { name = "sub_822F51D4" }
+0x822F51F4 = { name = "sub_822F51F4" }
+0x822F5210 = { name = "sub_822F5210" }
+0x82409E88 = { name = "sub_82409E88" }
+0x8240A3C4 = { name = "sub_8240A3C4" }
+0x8240A7A0 = { name = "sub_8240A7A0" }
+0x8240B0B4 = { name = "sub_8240B0B4" }
+0x8240B4E4 = { name = "sub_8240B4E4" }
+0x8240B55C = { name = "sub_8240B55C" }
+0x8240B574 = { name = "sub_8240B574" }
+0x8240BF1C = { name = "sub_8240BF1C" }
+0x821AC0A8 = { name = "sub_821AC0A8" }
