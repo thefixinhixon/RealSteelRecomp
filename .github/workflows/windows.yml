@@ -188,12 +188,30 @@ jobs:
         shell: pwsh
         run: windeployqt tp-launcher/out/build/win/TPFactualMetalLauncher.exe
 
+      - name: Bundle official 7-Zip next to the exe (archive import)
+        shell: pwsh
+        run: |
+          # The launcher's archive import probes for a bundled 7z.exe
+          # next to itself (tp-launcher/src/archiveimport.cpp). Ship
+          # the unmodified official 7-Zip console binaries so import
+          # works on machines (and Proton prefixes) with no 7-Zip
+          # installed. 7-Zip is LGPL; see licenses/7-Zip-License.txt.
+          $installer = Join-Path $env:RUNNER_TEMP '7z2409-x64.exe'
+          Invoke-WebRequest -Uri 'https://www.7-zip.org/a/7z2409-x64.exe' -OutFile $installer
+          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path $sevenZip)) { throw "runner image 7-Zip not found at $sevenZip" }
+          & $sevenZip x -y "-o$env:RUNNER_TEMP\7z-extract" $installer 7z.exe 7z.dll | Out-Null
+          Copy-Item "$env:RUNNER_TEMP\7z-extract\7z.exe" tp-launcher/out/build/win/
+          Copy-Item "$env:RUNNER_TEMP\7z-extract\7z.dll" tp-launcher/out/build/win/
+          Get-ChildItem tp-launcher/out/build/win/7z.* | Select-Object Name, Length
+
       - name: Upload launcher artifact
         uses: actions/upload-artifact@v4
         with:
           name: factual-metal-launcher-windows
           path: |
             tp-launcher/out/build/win/TPFactualMetalLauncher.exe
+            tp-launcher/out/build/win/7z.exe
             tp-launcher/out/build/win/*.dll
             tp-launcher/out/build/win/platforms/**
             tp-launcher/out/build/win/styles/**

@@ -88,9 +88,14 @@ QString sevenZipExecutable()
     const QString appDir = QCoreApplication::applicationDirPath();
     const QStringList names{QStringLiteral("7zz"), QStringLiteral("7z")};
     for (const QString &name : names) {
-        const QString bundled = QDir(appDir).filePath(name);
-        if (QFileInfo(bundled).isExecutable())
-            return bundled;
+        // Bundled copy first. Windows binaries carry an .exe suffix
+        // (the Windows package ships 7z.exe + 7z.dll), so probe both
+        // spellings; on other platforms the suffixed name just misses.
+        for (const QString &cand : {name, name + QStringLiteral(".exe")}) {
+            const QString bundled = QDir(appDir).filePath(cand);
+            if (QFileInfo(bundled).isExecutable())
+                return bundled;
+        }
         const QString onPath = QStandardPaths::findExecutable(name);
         if (!onPath.isEmpty())
             return onPath;
@@ -106,9 +111,9 @@ Resolved resolveArchive(const QString &archivePath,
     const QString exe = sevenZipExecutable();
     if (exe.isEmpty()) {
         out.error = QStringLiteral(
-            "No archive tool found. The launcher needs 7z to open "
-            ".rar/.zip archives (the AppImage bundles it; a packaged "
-            "install can use the system p7zip).");
+            "No archive tool found. The launcher needs 7-Zip to open "
+            ".rar/.zip archives (release packages bundle it next to "
+            "the launcher; a system 7-Zip also works).");
         return out;
     }
 

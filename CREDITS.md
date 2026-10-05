@@ -81,8 +81,9 @@ full texts.
   GNU LGPL with the unRAR license restriction for some code, and
   BSD 2-/3-Clause for other parts; 7-Zip's own license text is
   reproduced verbatim in `licenses/7-Zip-License.txt`.
-  An unmodified official 7zz binary is bundled next to the launcher
-  in the release packages and used only to unpack user-supplied
+  An unmodified official 7-Zip binary is bundled next to the
+  launcher in the release packages (7zz on Linux, 7z.exe + 7z.dll
+  on Windows) and used only to unpack user-supplied
   .rar/.zip/.7z archives during game import. Source:
   https://www.7-zip.org/
 - Launcher banner and icon artwork were generated for this project
