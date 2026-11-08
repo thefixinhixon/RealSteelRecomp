@@ -45,7 +45,7 @@ At most 2 headless games at a time.
 | C1 | Fresh save to the end of the first career fight, 3 runs | 2026-11-07, branch perf-pacing-overhaul: 3/3 ok, 0 crash lines, 0 pads; fight avg 58.8 / 59.5 / 59.2 fps (vsync on, limit 60, headless) |
 | C2 | Soak + every level (no warp flag; use a saved career) | |
 | C3 | Perf in career arena intro / first fight (--rs_perf_log=true) | 2026-11-07: arena uncapped 32.9 fps (v1.0) -> 67.7 fps; see README "Performance work" |
-| C4 | User sign-off with their own controller | |
+| C4 | User sign-off with their own controller | 2026-11-07, v1.1: user played it - "seems to be much better" (no fps numbers yet) |
 
 ### Work board
 

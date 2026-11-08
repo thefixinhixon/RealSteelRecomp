@@ -1083,6 +1083,24 @@ index 228728d..8424fb3 100644
      return std::nullopt;
    }
    size_t pos = storage.size();
+diff --git a/src/core/memory_posix.cpp b/src/core/memory_posix.cpp
+index b52bf39..3410b1c 100644
+--- a/src/core/memory_posix.cpp
++++ b/src/core/memory_posix.cpp
+@@ -483,6 +483,13 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, siz
+     shm_unlink(full_path.c_str());
+     return kFileMappingHandleInvalid;
+   }
++  // HOUSE: drop the name at once. Every view is mapped through this
++  // descriptor, never reopened by name, so the object stays valid while it
++  // is open or mapped - and the kernel frees it when the process exits for
++  // any reason. Before, a crashed or killed run leaked its multi-GB
++  // /dev/shm/xenia_memory_* file until /dev/shm filled and new runs died
++  // with SIGBUS. (CloseFileMappingHandle's later unlink is then a no-op.)
++  shm_unlink(full_path.c_str());
+   return static_cast<FileMappingHandle>(ret);
+ #endif
+ }
 diff --git a/src/core/threading_posix.cpp b/src/core/threading_posix.cpp
 index 9ac8d15..be83c4d 100644
 --- a/src/core/threading_posix.cpp

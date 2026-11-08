@@ -138,15 +138,16 @@ display with audio muted and real controllers disabled (see
 `docs/headless.md` and `AGENTS.md`), so it can be tested on a desktop
 that is in use.
 
-## Known landmine: `/dev/shm` leaks (Linux)
+## Fixed: `/dev/shm` leaks (Linux)
 
-The runtime backs guest memory with a ~4.8 GB `xenia_memory_*` file in
-`/dev/shm` per run. Crashed or killed runs **leak** these files; when
-`/dev/shm` fills, new runs die with a bus error (exit code 7)
-immediately after "Guest memory arena mapped". The launchers vacuum
-stale files before launching; if you're running the game directly,
-check `df -h /dev/shm` and remove stale files belonging to dead
-processes: `rm /dev/shm/xenia_memory_*`.
+The runtime backs guest memory with a ~4.8 GB shared-memory object.
+Up to v1.1 it was a named `/dev/shm/xenia_memory_*` file, and crashed or
+killed runs **leaked** it; once `/dev/shm` filled, new runs died with a
+bus error right after "Guest memory arena mapped". The house runtime now
+removes the name as soon as the object is created, so the kernel frees
+the memory whenever the game exits, crash or not. Leftover files from
+older builds are safe to delete while no game is running:
+`rm /dev/shm/xenia_memory_*`.
 
 ## Credits & disclosure
 
