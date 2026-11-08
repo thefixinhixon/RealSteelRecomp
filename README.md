@@ -23,10 +23,13 @@ produced 'Splosion Man's verified Windows test build.
 > This is a fan-made interoperability project; do not redistribute
 > game assets.
 >
-> Note: the game's DLC robots were separate downloads on Xbox Live and
-> are **not** part of the base package — roster slots belonging to DLC
-> fighters stay locked without them. Online versus is not supported
-> (the Xbox Live services it used are gone); local play is the target.
+> Note: the game's DLC (robot parts, motions, colour packs) were
+> separate downloads on Xbox Live and are **not** part of the base
+> package. If you have the add-on packages, the launcher's **Import DLC
+> package or archive...** button installs them (a package, a folder, or a
+> .rar/.zip/.7z of them); see [DLC](#dlc) below. Online versus is not
+> supported (the Xbox Live services it used are gone); local play is the
+> target.
 
 ## Download
 
@@ -74,6 +77,28 @@ way during the port:
   texture fetches with 'invalid' fetch constants thousands of times
   per session; without the runtime's tolerance those draws render as
   flickering green textures.
+
+## DLC
+
+All 18 Real Steel add-on packages load and their parts appear in the
+Assembly shop. Import them with the launcher's **Import DLC package or
+archive...** button: it installs into your Save data folder (or the
+runtime's default, `~/.local/share/realsteel`), in the layout the
+runtime's content system reads, with the license data the game checks.
+
+The later add-ons (14-21) were made for the game's title update, which
+this port does not have. Their parts used to show placeholder names
+such as `Text10900`: the base game reads only the original string-table
+format, and those add-ons keep their text in a newer one. The launcher
+fixes that before every launch: it copies the missing part names and
+descriptions from the newest add-on's table into the older-format
+tables the game does read, keeping their structure exactly as the game
+expects (originals are kept as `string.pac.orig`). The same fix is
+available as a script, `tools/dlc/merge_string_tables.py`, which also
+documents the format.
+
+Features that need the title update's code are not available: the
+KO-rules match type and the other online-session options.
 
 ## Building from source
 

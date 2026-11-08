@@ -35,3 +35,7 @@ tools/linux/ptracer.so
 # Local agent notes (not part of the project)
 CLAUDE.md
 AGENTS.md
+
+# Python bytecode
+__pycache__/
+*.pyc

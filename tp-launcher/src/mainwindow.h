@@ -28,6 +28,7 @@ public:
 private slots:
     void onPlayClicked();
     void onImportClicked();
+    void onDlcImportClicked();
     void onSettingsChanged();
     void onResetDefaultsClicked();
     void onBrowseUserDataRoot();
@@ -44,6 +45,9 @@ private:
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void updateOpenDataButton();
+    // Where the game keeps saves and DLC: the Save data folder setting,
+    // or the runtime's own default when that is empty.
+    QString effectiveUserDataRoot() const;
 
     GameProfile profile_;   // The compiled-in profile (TP_GAME)
     GameSettings settings_; // Last loaded/saved settings
@@ -58,6 +62,7 @@ private:
     QLabel *commandLabel_ = nullptr;
     QPushButton *playButton_ = nullptr;
     QPushButton *importButton_ = nullptr;
+    QPushButton *dlcImportButton_ = nullptr;
 
     // Graphics
     QComboBox *resolutionCombo_ = nullptr;

@@ -7,6 +7,8 @@
 #include "platform.h"
 #include "stfs/stfspackage.h"
 #include "archiveimport.h"
+#include "dlcimport.h"
+#include "dlcstrings.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -27,6 +29,7 @@
 #include <QScrollArea>
 #include <QSettings>
 #include <QSpinBox>
+#include <QStandardPaths>
 #include <QTabWidget>
 #include <QThread>
 #include <QUrl>
@@ -100,6 +103,7 @@ MainWindow::MainWindow(QWidget *parent)
     playButton_ = new QPushButton(QStringLiteral("PLAY"), gameTab);
     playButton_->setObjectName(QStringLiteral("playButton"));
     importButton_ = new QPushButton(QStringLiteral("Import XBLA package or archive..."), gameTab);
+    dlcImportButton_ = new QPushButton(QStringLiteral("Import DLC package or archive..."), gameTab);
     commandLabel_ = new QLabel(gameTab);
     commandLabel_->setObjectName(QStringLiteral("commandLabel"));
     commandLabel_->setWordWrap(true);
@@ -108,11 +112,13 @@ MainWindow::MainWindow(QWidget *parent)
     gameLayout->addWidget(rootLabel_);
     gameLayout->addWidget(playButton_);
     gameLayout->addWidget(importButton_);
+    gameLayout->addWidget(dlcImportButton_);
     gameLayout->addWidget(commandLabel_);
     gameLayout->addStretch();
     tabs->addTab(gameTab, QStringLiteral("Game"));
     connect(playButton_, &QPushButton::clicked, this, &MainWindow::onPlayClicked);
     connect(importButton_, &QPushButton::clicked, this, &MainWindow::onImportClicked);
+    connect(dlcImportButton_, &QPushButton::clicked, this, &MainWindow::onDlcImportClicked);
 
     // ---------------- Settings tab ----------------
     // Every option the runtime accepts, in four sections. The page
@@ -483,9 +489,23 @@ void MainWindow::onPlayClicked()
 
     platform::vacuumGuestMemory();
 
+    // Give later DLC parts their real names (see dlcstrings.h). Cheap
+    // when nothing changed: tables are stamped with their source.
+    QString dlcNote;
+    if (profile_.titleId == QStringLiteral("584111E0")) {
+        dlcstrings::Result fix;
+        QString fixError;
+        if (!dlcstrings::fixDlcStringTables(effectiveUserDataRoot(), profile_.titleId, &fix,
+                                            &fixError))
+            dlcNote = QStringLiteral("\n(DLC text fix failed: %1)").arg(fixError);
+        else if (fix.tablesPatched > 0)
+            dlcNote = QStringLiteral("\n(DLC part names restored in %1 table(s))")
+                          .arg(fix.tablesPatched);
+    }
+
     QString error;
     if (executeLaunchPlan(plan, &error)) {
-        commandLabel_->setText(QStringLiteral("Launched: %1").arg(plan.commandLine));
+        commandLabel_->setText(QStringLiteral("Launched: %1").arg(plan.commandLine) + dlcNote);
     } else {
         commandLabel_->setText(QStringLiteral("Launch failed: %1").arg(error));
     }
@@ -727,4 +747,101 @@ void MainWindow::showEvent(QShowEvent *event)
 {
     QMainWindow::showEvent(event);
     refreshBanner();
+}
+
+QString MainWindow::effectiveUserDataRoot() const
+{
+    if (!settings_.userDataRoot.isEmpty())
+        return settings_.userDataRoot;
+    // The runtime's default: its user folder (Documents on Windows, the
+    // XDG data dir elsewhere) + the game's program name.
+#if defined(Q_OS_WIN)
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+#else
+    const QString base = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+#endif
+    return QDir(base).filePath(profile_.exeName);
+}
+
+void MainWindow::onDlcImportClicked()
+{
+    settings_ = collectSettings();
+    settings_.save();
+
+    // DLC is installed under the user data root the game is launched
+    // with: the Save data folder setting, or the runtime's default.
+    const QString root = effectiveUserDataRoot();
+
+    const QString picked = QFileDialog::getOpenFileName(
+        this, QStringLiteral("Select DLC package or archive"), QDir::homePath(),
+        QStringLiteral("All files (*);;Archives (*.rar *.zip *.7z)"));
+    if (picked.isEmpty())
+        return;
+
+    struct Result {
+        bool ok = false;
+        QString error;
+        dlcimport::Outcome outcome;
+        dlcstrings::Result textFix;
+        QString textFixError;
+    };
+    auto result = std::make_shared<Result>();
+
+    auto *dialog = new QProgressDialog(QStringLiteral("Reading package..."), QString(), 0, 0,
+                                       this);
+    dialog->setWindowTitle(QStringLiteral("Import DLC"));
+    dialog->setWindowModality(Qt::WindowModal);
+    dialog->setCancelButton(nullptr);
+    dialog->setMinimumDuration(0);
+    dialog->show();
+    dlcImportButton_->setEnabled(false);
+
+    const QString titleId = profile_.titleId;
+    QThread *thread = QThread::create([picked, root, titleId, dialog, result]() {
+        auto progress = [dialog](const QString &name) {
+            QMetaObject::invokeMethod(
+                dialog,
+                [dialog, name]() {
+                    dialog->setLabelText(QStringLiteral("Installing %1").arg(name));
+                },
+                Qt::QueuedConnection);
+        };
+        result->ok = dlcimport::importDlc(picked, root, titleId, progress, &result->outcome,
+                                          &result->error);
+        if (result->outcome.installed > 0 && titleId == QStringLiteral("584111E0"))
+            dlcstrings::fixDlcStringTables(root, titleId, &result->textFix,
+                                           &result->textFixError);
+    });
+    connect(thread, &QThread::finished, this, [this, thread, dialog, result, root]() {
+        thread->deleteLater();
+        dialog->close();
+        dialog->deleteLater();
+        dlcImportButton_->setEnabled(true);
+        if (result->outcome.installed == 0) {
+            QString detail = result->error;
+            if (!result->outcome.skipped.isEmpty())
+                detail += QStringLiteral("\n\n") + result->outcome.skipped.join(QStringLiteral("\n"));
+            QMessageBox::warning(this, QStringLiteral("Import DLC"),
+                                 QStringLiteral("No content was installed.\n%1").arg(detail));
+            return;
+        }
+        QStringList lines;
+        lines.append(QStringLiteral("Installed %1 package(s) into:\n%2")
+                         .arg(result->outcome.installed)
+                         .arg(root));
+        for (const QString &name : result->outcome.names)
+            lines.append(QStringLiteral("\u2022 %1").arg(name));
+        if (!result->outcome.skipped.isEmpty())
+            lines.append(QStringLiteral("Skipped:\n") +
+                         result->outcome.skipped.join(QStringLiteral("\n")));
+        if (result->textFix.tablesPatched > 0)
+            lines.append(QStringLiteral("Restored the names of %1 DLC parts.")
+                             .arg(result->textFix.stringsFilled / result->textFix.tablesPatched));
+        if (!result->textFixError.isEmpty())
+            lines.append(QStringLiteral("DLC text fix failed: %1").arg(result->textFixError));
+        lines.append(QStringLiteral("The game loads it on the next launch."));
+        QMessageBox::information(this, QStringLiteral("Import DLC"),
+                                 lines.join(QStringLiteral("\n")));
+    });
+    thread->start();
 }

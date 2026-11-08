@@ -38,6 +38,8 @@ add_executable(${TP_TARGET}
     src/main.cpp
     src/mainwindow.cpp
     src/archiveimport.cpp
+    src/dlcimport.cpp
+    src/dlcstrings.cpp
     src/gamesettings.cpp
     src/gamedetect.cpp
     src/launcher.cpp
@@ -65,4 +67,19 @@ if(TPMAW_BUILD_STFS_TEST)
     )
     target_include_directories(stfs_test PRIVATE src)
     target_link_libraries(stfs_test PRIVATE Qt6::Core)
+endif()
+
+# Headless DLC string-table harness: merges two string.pac tables exactly as
+# the launcher does (compare against tools/dlc/merge_string_tables.py).
+option(TP_BUILD_DLCSTRINGS_TEST "Build the dlcstrings_test CLI harness" OFF)
+if(TP_BUILD_DLCSTRINGS_TEST)
+    add_executable(dlcstrings_test
+        src/dlcstrings_test_main.cpp
+        src/dlcstrings.cpp
+        src/dlcimport.cpp
+        src/archiveimport.cpp
+        src/stfs/stfspackage.cpp
+    )
+    target_include_directories(dlcstrings_test PRIVATE src)
+    target_link_libraries(dlcstrings_test PRIVATE Qt6::Core)
 endif()

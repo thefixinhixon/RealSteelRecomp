@@ -39,9 +39,12 @@ SETTINGS (all optional, saved automatically, Reset button included)
 GOOD TO KNOW
   - Online versus is stubbed out: this is an offline build
     (single player and local play work).
-  - The DLC fighters were separate downloads on the Xbox 360 and
-    are not part of the base package, so those roster slots stay
-    locked unless you supply data that includes them.
+  - DLC: if you have the add-on packages, use "Import DLC package or
+    archive..." (a package, a folder, or a .rar/.zip/.7z of them).
+    All 18 add-ons load; the launcher also restores the real names of
+    the later add-ons' parts, which the game would otherwise show as
+    "Text<number>". The KO-rules match type needs the game's title
+    update and is not available.
 
 REQUIREMENTS
   - 64-bit Linux (x86_64) with a Vulkan-capable GPU and driver.
