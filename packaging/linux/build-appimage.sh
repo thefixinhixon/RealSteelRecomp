@@ -31,7 +31,8 @@ APPDIR="$WORK/AppDir"
 APPIMAGE="$OUT_DIR/RealSteel-x86_64-$VERSION.AppImage"
 ZIP="$OUT_DIR/RealSteel-Linux-$VERSION.zip"
 
-for f in "$LAUNCHER_BIN" "$GAME_BUILD/realsteel" "$GAME_BUILD/librexruntime.so" \
+for f in "$LAUNCHER_BIN" "$GAME_BUILD/realsteel" "$GAME_BUILD/realsteel-tu" \
+         "$GAME_BUILD/librexruntime.so" \
          "$GAME_BUILD/librexgpu-xenos.so" "$SEVENZIP" "$TOOLS/linuxdeploy" \
          "$TOOLS/appimagetool"; do
   [[ -f "$f" ]] || { echo "Missing input: $f" >&2; exit 1; }
@@ -41,6 +42,7 @@ rm -rf "$WORK"
 install -d "$APPDIR/usr/bin" "$APPDIR/usr/share/licenses/realsteel"
 install -m755 "$LAUNCHER_BIN" "$APPDIR/usr/bin/TPFactualMetalLauncher"
 install -m755 "$GAME_BUILD/realsteel" "$APPDIR/usr/bin/realsteel"
+install -m755 "$GAME_BUILD/realsteel-tu" "$APPDIR/usr/bin/realsteel-tu"
 install -m755 "$GAME_BUILD/librexruntime.so" "$APPDIR/usr/bin/librexruntime.so"
 install -m755 "$GAME_BUILD/librexgpu-xenos.so" "$APPDIR/usr/bin/librexgpu-xenos.so"
 install -m755 "$SEVENZIP" "$APPDIR/usr/bin/7zz"
@@ -67,6 +69,7 @@ export PATH="$TOOLS:$PATH"
   --appdir "$APPDIR" \
   --executable "$APPDIR/usr/bin/TPFactualMetalLauncher" \
   --executable "$APPDIR/usr/bin/realsteel" \
+  --executable "$APPDIR/usr/bin/realsteel-tu" \
   --executable "$APPDIR/usr/bin/7zz" \
   --desktop-file "$WORK/factual-metal.desktop" \
   --icon-file "$WORK/factual-metal.png" \

@@ -41,6 +41,7 @@ GameSettings GameSettings::load()
     s.sparseSharedMemory = q->value(QStringLiteral("vulkan_sparse_shared_memory"), s.sparseSharedMemory).toBool();
     s.asyncSkipIncompleteFrames = q->value(QStringLiteral("vulkan_async_skip_incomplete_frames"), s.asyncSkipIncompleteFrames).toBool();
     s.userLanguage    = q->value(QStringLiteral("user_language"), s.userLanguage).toInt();
+    s.useTitleUpdate  = q->value(QStringLiteral("use_title_update"), s.useTitleUpdate).toBool();
     s.userCountry     = q->value(QStringLiteral("user_country"), s.userCountry).toInt();
     const int storedVersion = q->value(QStringLiteral("settings_version"), 1).toInt();
     q->endGroup();
@@ -88,6 +89,7 @@ void GameSettings::save() const
     q->setValue(QStringLiteral("log_level"), logLevel);
     // Advanced
     q->setValue(QStringLiteral("vulkan_sparse_shared_memory"), sparseSharedMemory);
+    q->setValue(QStringLiteral("use_title_update"), useTitleUpdate);
     q->setValue(QStringLiteral("vulkan_async_skip_incomplete_frames"), asyncSkipIncompleteFrames);
     q->setValue(QStringLiteral("user_language"), userLanguage);
     q->setValue(QStringLiteral("user_country"), userCountry);

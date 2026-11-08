@@ -86,6 +86,7 @@ private:
     QCheckBox *asyncSkipCheck_ = nullptr;
     QSpinBox *userLanguageSpin_ = nullptr;
     QSpinBox *userCountrySpin_ = nullptr;
+    QCheckBox *titleUpdateCheck_ = nullptr; // Only when the profile has a TU build
 
     QPushButton *resetButton_ = nullptr;
 };

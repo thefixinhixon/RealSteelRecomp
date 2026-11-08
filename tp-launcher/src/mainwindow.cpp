@@ -273,6 +273,13 @@ MainWindow::MainWindow(QWidget *parent)
                                  "0 = runtime default."));
     addSettingRow(advanced, QStringLiteral("User country"), userCountrySpin_,
                   QStringLiteral("Country ID the game sees. 0 = runtime default."));
+    if (!profile_.titleUpdateExeName.isEmpty()) {
+        titleUpdateCheck_ = new QCheckBox(advancedBox);
+        addSettingRow(advanced, QStringLiteral("Use title update"), titleUpdateCheck_,
+                      QStringLiteral("When the game's title update is installed (import its "
+                                     "TU_ package with Import DLC), start the build made from "
+                                     "it. Off = always the original release."));
+    }
     pageLayout->addWidget(advancedBox);
 
     // Reset restores the GameSettings struct defaults (gamesettings.h)
@@ -306,6 +313,8 @@ MainWindow::MainWindow(QWidget *parent)
     connect(asyncSkipCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
     connect(userLanguageSpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
     connect(userCountrySpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
+    if (titleUpdateCheck_)
+        connect(titleUpdateCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
 
     refreshGameStatus();
 }
@@ -326,6 +335,7 @@ void MainWindow::loadSettingsIntoUi()
         QSignalBlocker(userCountrySpin_),
     };
     Q_UNUSED(blockers);
+    const QSignalBlocker tuBlocker(titleUpdateCheck_);
 
     // A stored value that matches no combo item falls back to the
     // first item, so what the user sees is what collectSettings()
@@ -359,6 +369,8 @@ void MainWindow::loadSettingsIntoUi()
     asyncSkipCheck_->setChecked(settings_.asyncSkipIncompleteFrames);
     userLanguageSpin_->setValue(settings_.userLanguage);
     userCountrySpin_->setValue(settings_.userCountry);
+    if (titleUpdateCheck_)
+        titleUpdateCheck_->setChecked(settings_.useTitleUpdate);
 
     updateOpenDataButton();
 }
@@ -387,6 +399,7 @@ GameSettings MainWindow::collectSettings() const
     s.asyncSkipIncompleteFrames = asyncSkipCheck_->isChecked();
     s.userLanguage = userLanguageSpin_->value();
     s.userCountry = userCountrySpin_->value();
+    s.useTitleUpdate = titleUpdateCheck_ ? titleUpdateCheck_->isChecked() : s.useTitleUpdate;
     return s;
 }
 
@@ -485,21 +498,25 @@ void MainWindow::onPlayClicked()
 
     if (dataRoot_.isEmpty())
         dataRoot_ = gameRoot_;
-    const LaunchPlan plan = buildLaunchPlan(profile_, settings_, gameRoot_, dataRoot_);
+    const LaunchPlan plan =
+        buildLaunchPlan(profile_, settings_, gameRoot_, dataRoot_, effectiveUserDataRoot());
 
     platform::vacuumGuestMemory();
 
-    // Give later DLC parts their real names (see dlcstrings.h). Cheap
-    // when nothing changed: tables are stamped with their source.
+    // Original release only: give later DLC parts their real names (see
+    // dlcstrings.h; the title update reads those add-ons' text itself).
+    // Cheap when nothing changed: tables are stamped with their source.
     QString dlcNote;
-    if (profile_.titleId == QStringLiteral("584111E0")) {
+    if (!plan.titleUpdateNote.isEmpty())
+        dlcNote += QStringLiteral("\n(%1)").arg(plan.titleUpdateNote);
+    if (profile_.titleId == QStringLiteral("584111E0") && plan.titleUpdate.isEmpty()) {
         dlcstrings::Result fix;
         QString fixError;
         if (!dlcstrings::fixDlcStringTables(effectiveUserDataRoot(), profile_.titleId, &fix,
                                             &fixError))
-            dlcNote = QStringLiteral("\n(DLC text fix failed: %1)").arg(fixError);
+            dlcNote += QStringLiteral("\n(DLC text fix failed: %1)").arg(fixError);
         else if (fix.tablesPatched > 0)
-            dlcNote = QStringLiteral("\n(DLC part names restored in %1 table(s))")
+            dlcNote += QStringLiteral("\n(DLC part names restored in %1 table(s))")
                           .arg(fix.tablesPatched);
     }
 

@@ -1,0 +1,13 @@
+# Title update build (realsteel-tu): default.xex with the title update's
+# default.xexp (TU 2, v0.0.2.5) next to it in assets-tu/; codegen applies it.
+[project]
+name = "realsteel"
+sdk_version = "0.10.0"
+game_root = "assets-tu"
+
+[entrypoint]
+file_path = "assets-tu/default.xex"
+out_directory_path = "generated-tu/default"
+includes = [
+	"realsteel_tu_config.toml",
+]

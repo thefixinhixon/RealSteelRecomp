@@ -7,6 +7,8 @@
 #include <rex/rex_app.h>
 #include <rex/cvar.h>
 
+#include "title_update.h"
+
 class RealSteelApp : public rex::ReXApp {
  public:
   using rex::ReXApp::ReXApp;
@@ -33,5 +35,25 @@ class RealSteelApp : public rex::ReXApp {
   // std::unique_ptr<rex::ui::AchievementNotificationDialog>
   // CreateAchievementNotificationDialog() override;
   // void OnShutdown() override {}
-  // void OnConfigurePaths(rex::PathConfig& paths) override {}
+
+#ifdef REALSTEEL_TITLE_UPDATE
+  // Title update: find the installed TU and mount it as update:\\ (the
+  // runtime applies update:\\default.xexp to game:\\default.xex).
+  void OnConfigurePaths(rex::PathConfig& paths) override {
+    realsteel::ConfigureTitleUpdatePaths(paths);
+  }
+  static constexpr uint32_t kExpectedVersion = realsteel::kTitleUpdateVersion;
+#else
+  static constexpr uint32_t kExpectedVersion = realsteel::kBaseVersion;
+#endif
+
+  // The generated code is for one exact executable version: refuse to
+  // start on anything else instead of crashing somewhere later.
+  bool ConstructRuntime(const rex::PathConfig& paths) override {
+#ifdef REALSTEEL_TITLE_UPDATE
+    if (!realsteel::CheckTitleUpdatePresent(paths)) return false;
+#endif
+    if (!rex::ReXApp::ConstructRuntime(paths)) return false;
+    return realsteel::CheckLoadedVersion(runtime(), kExpectedVersion);
+  }
 };

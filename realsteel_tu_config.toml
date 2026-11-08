@@ -1,0 +1,25 @@
+# Real Steel title update (v0.0.2.5) codegen config - function hints.
+# Targets the analyzer missed on the first pass (from the codegen log).
+# These are TU addresses; the base hints in realsteel_config.toml do not apply.
+
+[functions]
+0x8208CC90 = { name = "sub_8208CC90" }
+0x8208CF84 = { name = "sub_8208CF84" }
+0x8208D848 = { name = "sub_8208D848" }
+0x8222973C = { name = "sub_8222973C" }
+0x8222EA2C = { name = "sub_8222EA2C" }
+0x822319F8 = { name = "sub_822319F8" }
+0x82231F1C = { name = "sub_82231F1C" }
+0x822339A0 = { name = "sub_822339A0" }
+0x82233A44 = { name = "sub_82233A44" }
+0x82235B74 = { name = "sub_82235B74" }
+0x82235B90 = { name = "sub_82235B90" }
+0x82235C00 = { name = "sub_82235C00" }
+0x822364F8 = { name = "sub_822364F8" }
+0x82236720 = { name = "sub_82236720" }
+0x82236B10 = { name = "sub_82236B10" }
+0x82414098 = { name = "sub_82414098" }
+0x824145D4 = { name = "sub_824145D4" }
+0x824149B0 = { name = "sub_824149B0" }
+0x82414E44 = { name = "sub_82414E44" }
+0x82415274 = { name = "sub_82415274" }

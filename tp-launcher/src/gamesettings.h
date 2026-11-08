@@ -53,6 +53,9 @@ struct GameSettings {
     bool    asyncSkipIncompleteFrames = false; // vulkan_async_skip_incomplete_frames
     int     userLanguage = 0; // user_language; 0 = runtime default
     int     userCountry  = 0; // user_country; 0 = runtime default
+    // Start the title update build (GameProfile::titleUpdateExeName) when
+    // a matching title update is installed. Off = always the base game.
+    bool    useTitleUpdate = true;    // launcher-only; no runtime flag
 
     // Bumped when a stored default is wrong for existing users and must be
     // migrated (see GameSettings::load()).

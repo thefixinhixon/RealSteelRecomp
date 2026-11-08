@@ -4250,6 +4250,25 @@ index 2b93005..e824eef 100644
    }
  
    auto rip = ex->pc();
+diff --git a/src/system/user_module.cpp b/src/system/user_module.cpp
+index 171546f..64456e2 100644
+--- a/src/system/user_module.cpp
++++ b/src/system/user_module.cpp
+@@ -104,6 +104,14 @@ X_STATUS UserModule::LoadFromFile(const std::string_view path) {
+ 
+   // Search for sibling XEX patch file
+   auto patch_entry = kernel_state_->file_system()->ResolvePath(path_ + "p");
++  // HOUSE: then the title update's copy (update:\default.xexp), the way
++  // the console applies an installed title update to game:\default.xex.
++  // (path_ is the resolved device path, e.g. \Device\Harddisk0\Partition1\default.xex.)
++  if (!patch_entry) {
++    auto slash = path_.find_last_of("\\:");
++    auto name = slash == std::string::npos ? path_ : path_.substr(slash + 1);
++    patch_entry = kernel_state_->file_system()->ResolvePath("update:\\" + name + "p");
++  }
+   if (patch_entry) {
+     auto patch_path = patch_entry->absolute_path();
+ 
 diff --git a/src/system/xam/content_manager.cpp b/src/system/xam/content_manager.cpp
 index bd6c797..0229774 100644
 --- a/src/system/xam/content_manager.cpp

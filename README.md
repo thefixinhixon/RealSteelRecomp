@@ -27,7 +27,10 @@ produced 'Splosion Man's verified Windows test build.
 > separate downloads on Xbox Live and are **not** part of the base
 > package. If you have the add-on packages, the launcher's **Import DLC
 > package or archive...** button installs them (a package, a folder, or a
-> .rar/.zip/.7z of them); see [DLC](#dlc) below. Online versus is not
+> .rar/.zip/.7z of them); see [DLC](#dlc) below. The game's **title
+> update** is supported too: import its `TU_...` package the same way
+> and the launcher starts the build made from it; see
+> [Title update](#title-update). Online versus is not
 > supported (the Xbox Live services it used are gone); local play is the
 > target.
 
@@ -78,6 +81,37 @@ way during the port:
   per session; without the runtime's tolerance those draws render as
   flickering green textures.
 
+## Title update
+
+Real Steel's last title update (TU 2, executable version 0.0.2.5) is
+supported. Releases ship two game programs built from the same runtime:
+
+- `realsteel` — the original release (0.0.0.5), as before.
+- `realsteel-tu` — the game recompiled from `default.xex` with the
+  title update's `default.xexp` applied. At start it applies the same
+  patch to the image it loads, so code and data match.
+
+Import the title update package (the `TU_...` file) with **Import DLC
+package or archive...**; it installs next to your add-ons
+(`<save data>/0000000000000000/584111E0/000B0000/`). From then on PLAY
+starts `realsteel-tu` and the launcher shows "Title update: 0.0.2.5"
+(Settings > Advanced > Use title update turns it off). A `default.xexp`
+copied next to `default.xex` works as well. Each program checks the
+executable version it loaded and refuses to start on the wrong one,
+with a message saying why, instead of crashing later. Only TU 2 is
+supported; TU 1 (0.0.1.5) is detected and reported, and the original
+release is used.
+
+With the title update the game reads every add-on's text itself, so the
+later add-ons' part names are right without the string-table fix
+below, and its own additions appear, such as the "18. KO Rules Match"
+page in How to Play. (A KO-rules match itself is a DLC rule set;
+playing one was not tested.)
+
+Verified headless: the title update build boots, loads a career save
+with all 18 add-ons, shows every DLC part name, and plays full fights at
+a locked 60 fps with no faults.
+
 ## DLC
 
 All 18 Real Steel add-on packages load and their parts appear in the
@@ -86,8 +120,8 @@ archive...** button: it installs into your Save data folder (or the
 runtime's default, `~/.local/share/realsteel`), in the layout the
 runtime's content system reads, with the license data the game checks.
 
-The later add-ons (14-21) were made for the game's title update, which
-this port does not have. Their parts used to show placeholder names
+The later add-ons (14-21) were made for the game's title update. Run
+without it (the original release), their parts used to show placeholder names
 such as `Text10900`: the base game reads only the original string-table
 format, and those add-ons keep their text in a newer one. The launcher
 fixes that before every launch: it copies the missing part names and
@@ -97,8 +131,8 @@ expects (originals are kept as `string.pac.orig`). The same fix is
 available as a script, `tools/dlc/merge_string_tables.py`, which also
 documents the format.
 
-Features that need the title update's code are not available: the
-KO-rules match type and the other online-session options.
+This fix runs only for the original release; with the title update
+(above) it isn't needed.
 
 ## Building from source
 
@@ -121,7 +155,14 @@ PipeWire systems. (Ask us how we know.)
    with `scripts/fix-tailcalls.py`). The `generated/` tree in this
    repo is already in that post-fix state — it's the tree that
    produced the shipping Linux build.
-3. Build the game: CMake preset `linux-amd64-release` on Linux,
+   The title update build has its own tree, `generated-tu/` (also
+   included, post-fix): put `default.xex` and the TU's `default.xexp`
+   in `assets-tu/` and run `scripts/codegen-tu.sh <rexglue>`. It uses
+   `realsteel_tu_manifest.toml` and its own hints
+   (`realsteel_tu_config.toml`, TU addresses — the base hints do not
+   apply), post-fixes the tree, and puts back the base tree's frozen
+   `generated/rexglue.cmake`, which the codegen CLI always rewrites.
+3. Build the game (both `realsteel` and `realsteel-tu`): CMake preset `linux-amd64-release` on Linux,
    `win-amd64-release` on Windows, with
    `-DREXSDK_DIR=<sdk tree> -DREXGLUE_ENABLE_FIDELITYFX=ON`.
    (FidelityFX defaults OFF and fails *silently* — the game just looks

@@ -5,6 +5,7 @@
 #include "gamedetect.h"
 #include "gamesettings.h"
 #include "platform.h"
+#include "titleupdate.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -100,7 +101,8 @@ ExeSetResolution resolveExecutableSet(const GameProfile &profile,
 LaunchPlan buildLaunchPlan(const GameProfile &profile,
                            const GameSettings &settings,
                            const QString &gameRoot,
-                           const QString &dataRoot)
+                           const QString &dataRoot,
+                           const QString &userDataRoot)
 {
     LaunchPlan plan;
     plan.dataRoot = dataRoot;
@@ -131,6 +133,41 @@ LaunchPlan buildLaunchPlan(const GameProfile &profile,
         QFile::exists(QDir(gamedataDir).filePath(QStringLiteral("default.xex")))
             ? gamedataDir
             : gameRoot;
+
+    // Title update build: run it when its exact title update is
+    // installed (titleupdate.h) and its exe ships with this set.
+    if (!profile.titleUpdateExeName.isEmpty() && exeSet.found) {
+        const titleupdate::Found tu =
+            titleupdate::find(gameDataRoot, userDataRoot, profile.titleId,
+                              profile.titleUpdateVersion, profile.baseVersion);
+#if defined(Q_OS_WIN)
+        const QString tuExe =
+            QDir(exeSet.dir).filePath(profile.titleUpdateExeName + QStringLiteral(".exe"));
+#else
+        const QString tuExe = QDir(exeSet.dir).filePath(profile.titleUpdateExeName);
+#endif
+        const QString tuVersion = titleupdate::versionString(profile.titleUpdateVersion);
+        if (tu.xexpPath.isEmpty()) {
+            plan.titleUpdateNote =
+                tu.otherVersions.isEmpty()
+                    ? QStringLiteral("Title update: not installed (original release)")
+                    : QStringLiteral("Title update: found %1, this build needs %2 "
+                                     "(original release)")
+                          .arg(tu.otherVersions, tuVersion);
+        } else if (!settings.useTitleUpdate) {
+            plan.titleUpdateNote =
+                QStringLiteral("Title update: installed, off in Settings (original release)");
+        } else if (!QFileInfo(tuExe).isFile()) {
+            plan.titleUpdateNote =
+                QStringLiteral("Title update: installed, but %1 is missing next to %2 "
+                               "(original release)")
+                    .arg(QFileInfo(tuExe).fileName(), QFileInfo(plan.program).fileName());
+        } else {
+            plan.program = tuExe;
+            plan.titleUpdate = tu.xexpPath;
+            plan.titleUpdateNote = QStringLiteral("Title update: %1").arg(tuVersion);
+        }
+    }
 
     QStringList args;
 

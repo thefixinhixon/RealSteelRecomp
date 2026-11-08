@@ -31,6 +31,11 @@ struct LaunchPlan {
     QStringList exeSearched;   // Every folder examined, in order
     QStringList exeIncomplete; // "dir (missing ...)" notes: exe seen
                                // there, but without the full set
+
+    // Title update (GameProfile::titleUpdateExeName): the default.xexp
+    // the title update build will apply, "" when the base game runs.
+    QString titleUpdate;
+    QString titleUpdateNote; // One line for the UI, "" = nothing to say
 };
 
 // The game's program files: the exe plus the runtime libs it ships
@@ -58,10 +63,13 @@ ExeSetResolution resolveExecutableSet(const GameProfile &profile,
 
 // gameDataRoot is where the game's data sits (gameRoot/gamedata when that
 // exists, else the game root itself, matching isGameRoot's rule).
+// userDataRoot is the effective saves/content root (where an imported
+// title update lives); it decides which executable runs.
 LaunchPlan buildLaunchPlan(const GameProfile &profile,
                            const GameSettings &settings,
                            const QString &gameRoot,
-                           const QString &dataRoot);
+                           const QString &dataRoot,
+                           const QString &userDataRoot = QString());
 
 // Write last-command.txt into the plan's log folder, then start the game
 // detached (the launcher does not wait on it). Returns false + error

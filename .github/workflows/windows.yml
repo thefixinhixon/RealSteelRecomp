@@ -70,7 +70,7 @@ env:
 
 jobs:
   game:
-    name: Game (realsteel.exe + runtime)
+    name: Game (realsteel.exe + realsteel-tu.exe + runtime)
     runs-on: windows-latest
     steps:
       - name: Check out this repo
@@ -141,6 +141,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist-windows | Out-Null
           Copy-Item repo/out/build/win-amd64-release/realsteel.exe dist-windows/
+          Copy-Item repo/out/build/win-amd64-release/realsteel-tu.exe dist-windows/
           Copy-Item repo/out/build/win-amd64-release/amd_fidelityfx_dx12.dll dist-windows/
           $rt = 'repo/out/build/win-amd64-release/rexruntime.dll'
           if (-not (Test-Path $rt)) { $rt = 'rexglue-sdk/out/win-amd64/rexruntime.dll' }

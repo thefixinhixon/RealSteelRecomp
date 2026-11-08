@@ -5,6 +5,7 @@
 //     (what the launcher's Import DLC button does)
 #include "dlcimport.h"
 #include "dlcstrings.h"
+#include "titleupdate.h"
 
 #include <QCoreApplication>
 #include <QFile>
@@ -25,6 +26,15 @@ int main(int argc, char **argv)
         if (!ok)
             err << error << "\n";
         return ok ? 0 : 1;
+    }
+    if (args.size() == 4 && args[1] == QStringLiteral("--tu")) {
+        // --tu <game data root> <user data root>: Real Steel TU 2 lookup.
+        const titleupdate::Found tu = titleupdate::find(
+            args[2], args[3], QStringLiteral("584111E0"), 0x205u, 0x5u);
+        out << "match: " << (tu.xexpPath.isEmpty() ? QStringLiteral("-") : tu.xexpPath) << "\n"
+            << "other: " << (tu.otherVersions.isEmpty() ? QStringLiteral("-") : tu.otherVersions)
+            << "\n";
+        return tu.xexpPath.isEmpty() ? 1 : 0;
     }
     if (args.size() == 4 && args[1] == QStringLiteral("--import")) {
         dlcimport::Outcome outcome;
@@ -49,7 +59,7 @@ int main(int argc, char **argv)
         return 0;
     }
     if (args.size() != 4) {
-        err << "usage: dlcstrings_test <old> <newer> <out> | --fix <root> [title]\n";
+        err << "usage: dlcstrings_test <old> <newer> <out> | --fix <root> [title] | --tu <gamedata> <userdata>\n";
         return 2;
     }
     QFile a(args[1]), b(args[2]);

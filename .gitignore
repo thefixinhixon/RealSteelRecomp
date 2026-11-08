@@ -2,6 +2,8 @@
 # the game (XBLA package for title ID 584111E0, or an extracted folder
 # containing default.xex).
 assets/
+assets-tu/
+*.xexp
 *.xex
 *.iso
 *.rar

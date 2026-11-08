@@ -21,6 +21,11 @@ struct GameProfile {
     QString accent;       // Theme accent; substituted into the .qss at startup
     QString launcherName; // Product name: window title + QSettings app name
     QString themeFile;    // Stylesheet resource, e.g. ":/theme/maw.qss"
+    // Optional second build recompiled from the title-update-patched
+    // executable (titleupdate.h). Empty = the game has none.
+    QString titleUpdateExeName;     // e.g. "realsteel-tu"
+    quint32 titleUpdateVersion = 0; // XEX version the patch produces
+    quint32 baseVersion = 0;        // XEX version it applies to
 };
 
 // The Maw (Twisted Pixel, XBLA). Title id 584108C2.
@@ -75,10 +80,12 @@ inline const GameProfile &splosionProfile()
 // a preference: the game issues texture fetches with 'invalid' fetch
 // constants thousands of times per session, and without the runtime's
 // tolerance flag those draws misrender (flickering/green textures -
-// proven 2026-10-04). Vsync is the opposite story: it stays a user
-// setting, but this build's DEFAULT is off (gamesettings.h) because
-// the runtime's vsync emulation runs this game's fights at half
-// speed; the 60 fps frame limiter still paces it.
+// proven 2026-10-04). Vsync and the 60 fps limit are user settings
+// (defaults in gamesettings.h).
+//
+// realsteel-tu is the same game recompiled with title update 2
+// (v0.0.2.5) applied; it is started instead of realsteel when that
+// update is installed (titleupdate.h).
 inline const GameProfile &realsteelProfile()
 {
     static const GameProfile profile{
@@ -93,6 +100,9 @@ inline const GameProfile &realsteelProfile()
         QStringLiteral("#1fb6c9"), // cage-light cyan (drives the .qss)
         QStringLiteral("Factual Metal Launcher"),
         QStringLiteral(":/theme/realsteel.qss"),
+        QStringLiteral("realsteel-tu"),
+        0x00000205u, // 0.0.2.5
+        0x00000005u, // 0.0.0.5
     };
     return profile;
 }

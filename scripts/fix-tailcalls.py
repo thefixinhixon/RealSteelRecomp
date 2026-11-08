@@ -17,6 +17,8 @@ fully generated function:
     (or the unguarded fallthrough shape). The label exists in the same
     file, so the stub becomes `goto loc_TARGET;`.
 
+Usage: fix-tailcalls.py [generated-dir]   (default generated/default)
+
 The script asserts every replacement is justified (target defined /
 label present in-file) and fails loudly otherwise.
 """
@@ -24,7 +26,10 @@ import re
 import sys
 from pathlib import Path
 
-GEN = Path(__file__).resolve().parent.parent / "generated" / "default"
+ROOT = Path(__file__).resolve().parent.parent
+# Optional argument: the generated tree (default generated/default; the
+# title update build uses generated-tu/default).
+GEN = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "generated/default")
 
 CALL_RE = re.compile(
     r'REX_FATAL\("Unresolved call from 0x[0-9A-F]+ to 0x([0-9A-F]+)"\);')

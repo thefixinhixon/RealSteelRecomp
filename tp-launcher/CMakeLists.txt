@@ -40,6 +40,7 @@ add_executable(${TP_TARGET}
     src/archiveimport.cpp
     src/dlcimport.cpp
     src/dlcstrings.cpp
+    src/titleupdate.cpp
     src/gamesettings.cpp
     src/gamedetect.cpp
     src/launcher.cpp
@@ -76,6 +77,7 @@ if(TP_BUILD_DLCSTRINGS_TEST)
     add_executable(dlcstrings_test
         src/dlcstrings_test_main.cpp
         src/dlcstrings.cpp
+        src/titleupdate.cpp
         src/dlcimport.cpp
         src/archiveimport.cpp
         src/stfs/stfspackage.cpp
