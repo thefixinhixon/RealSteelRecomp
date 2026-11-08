@@ -32,5 +32,6 @@ TPSplosionmanLauncher.exe
 logs/
 tools/linux/ptracer.so
 
-# Local Claude Code entry point (not part of the project)
+# Local agent notes (not part of the project)
 CLAUDE.md
+AGENTS.md

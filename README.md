@@ -135,7 +135,7 @@ average/max and the guest clock rate every 2 s.
 
 Testing: `tools/linux/headless_run.sh` runs the game on a private Xvfb
 display with audio muted and real controllers disabled (see
-`docs/headless.md` and `AGENTS.md`), so it can be tested on a desktop
+`docs/headless.md`), so it can be tested on a desktop
 that is in use.
 
 ## Fixed: `/dev/shm` leaks (Linux)
