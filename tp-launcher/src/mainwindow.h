@@ -28,7 +28,7 @@ public:
 private slots:
     void onPlayClicked();
     void onImportClicked();
-    void onDlcImportClicked();
+    void onDlcImportClicked(bool pickFolder);
     void onSettingsChanged();
     void onResetDefaultsClicked();
     void onBrowseUserDataRoot();

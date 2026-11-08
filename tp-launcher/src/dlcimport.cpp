@@ -231,16 +231,25 @@ bool importDlc(const QString &pickedPath, const QString &userDataRoot,
                Outcome *outcome, QString *error)
 {
     QStringList packages;
-    QTemporaryDir scratch; // Archive payload, when the pick is one
+    // Archive payload, when the pick is one. Unpacked next to where it is
+    // installed, not in the system temp folder: that is often a small
+    // RAM-backed tmpfs, and DLC archives run to gigabytes. Removed when
+    // the import ends.
+    QDir().mkpath(userDataRoot);
+    QTemporaryDir scratch(QDir(userDataRoot).filePath(QStringLiteral(".dlc-import-XXXXXX")));
 
     const QFileInfo picked(pickedPath);
+    int archivesSeen = 0; // In a picked folder; reported if nothing else is found
     if (picked.isDir()) {
         QDirIterator walk(pickedPath, QDir::Files | QDir::NoDotAndDotDot,
                           QDirIterator::Subdirectories);
         while (walk.hasNext()) {
             const QString candidate = walk.next();
-            if (!isStfsFile(candidate))
+            if (!isStfsFile(candidate)) {
+                if (archiveimport::isArchiveFile(candidate))
+                    ++archivesSeen;
                 continue;
+            }
             PackageInfo info;
             if (probePackage(candidate, &info) &&
                 info.titleId == wantTitleId.toUpper())
@@ -296,6 +305,12 @@ bool importDlc(const QString &pickedPath, const QString &userDataRoot,
                 "No downloadable-content packages for this title "
                 "(%1) were found there.")
                          .arg(wantTitleId.toUpper());
+        if (error && archivesSeen > 0)
+            *error += QStringLiteral(
+                          "\n\nThe folder has %1 archive(s); archives inside a "
+                          "folder are not opened. Import an archive by picking "
+                          "it as a file.")
+                          .arg(archivesSeen);
         return false;
     }
 

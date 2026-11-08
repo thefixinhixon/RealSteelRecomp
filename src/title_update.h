@@ -101,7 +101,7 @@ inline std::string MissingTitleUpdateMessage(const std::string& detail) {
   return fmt::format(
       "Real Steel needs its title update (TU 2, version {}).\n\n{}\n\n"
       "Import the title update package (TU_...) with the launcher's "
-      "\"Import DLC package or archive...\" button, or copy its default.xexp "
+      "\"Import DLC or title update...\" button, or copy its default.xexp "
       "next to default.xex.",
       VersionString(kTitleUpdateVersion), detail);
 }

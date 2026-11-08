@@ -25,9 +25,9 @@ produced 'Splosion Man's verified Windows test build.
 >
 > Note: the game's DLC (robot parts, motions, colour packs) were
 > separate downloads on Xbox Live and are **not** part of the base
-> package. If you have the add-on packages, the launcher's **Import DLC
-> package or archive...** button installs them (a package, a folder, or a
-> .rar/.zip/.7z of them); see [DLC](#dlc) below. The game's **title
+> package. If you have the add-on packages, the launcher's **Import DLC or
+> title update...** button installs them (a package, a .rar/.zip/.7z of
+> them, or a folder); see [DLC](#dlc) below. The game's **title
 > update** is supported too: import its `TU_...` package the same way
 > and the launcher starts the build made from it; see
 > [Title update](#title-update). Online versus is not
@@ -91,8 +91,8 @@ supported. Releases ship two game programs built from the same runtime:
   title update's `default.xexp` applied. At start it applies the same
   patch to the image it loads, so code and data match.
 
-Import the title update package (the `TU_...` file) with **Import DLC
-package or archive...**; it installs next to your add-ons
+Import the title update package (the `TU_...` file) with **Import DLC or
+title update...**; it installs next to your add-ons
 (`<save data>/0000000000000000/584111E0/000B0000/`). From then on PLAY
 starts `realsteel-tu` and the launcher shows "Title update: 0.0.2.5"
 (Settings > Advanced > Use title update turns it off). A `default.xexp`
@@ -115,8 +115,10 @@ a locked 60 fps with no faults.
 ## DLC
 
 All 18 Real Steel add-on packages load and their parts appear in the
-Assembly shop. Import them with the launcher's **Import DLC package or
-archive...** button: it installs into your Save data folder (or the
+Assembly shop. Import them with the launcher's **Import DLC or title
+update...** button (pick a package, an archive, or a folder; folders
+are searched with their subfolders, archives inside a folder are not
+opened): it installs into your Save data folder (or the
 runtime's default, `~/.local/share/realsteel`), in the layout the
 runtime's content system reads, with the license data the game checks.
 

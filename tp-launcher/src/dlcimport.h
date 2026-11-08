@@ -50,7 +50,8 @@ using ProgressCallback = std::function<void(const QString &name)>;
 //   - a single STFS package file,
 //   - a .rar/.zip/.7z archive (unpacked with the bundled 7-Zip; every
 //     package inside whose title id matches is installed), or
-//   - a folder, searched recursively for matching packages.
+//   - a folder, searched recursively for matching packages (archives
+//     in it are not opened: a folder can hold unrelated large ones).
 // Packages for a different title are skipped and reported, never
 // installed into this game's tree. Returns true when at least one
 // package was installed.

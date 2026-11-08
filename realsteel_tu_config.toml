@@ -23,3 +23,7 @@
 0x824149B0 = { name = "sub_824149B0" }
 0x82414E44 = { name = "sub_82414E44" }
 0x82415274 = { name = "sub_82415274" }
+# Only reached through a function pointer, so analysis cannot find it; it
+# was found at run time ("Call to unresolved function"). Base equivalent:
+# 0x821AC0A8 in realsteel_config.toml.
+0x821B2350 = { name = "sub_821B2350" }

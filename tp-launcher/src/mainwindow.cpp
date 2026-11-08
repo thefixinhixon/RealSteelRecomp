@@ -23,6 +23,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QPushButton>
@@ -103,7 +104,17 @@ MainWindow::MainWindow(QWidget *parent)
     playButton_ = new QPushButton(QStringLiteral("PLAY"), gameTab);
     playButton_->setObjectName(QStringLiteral("playButton"));
     importButton_ = new QPushButton(QStringLiteral("Import XBLA package or archive..."), gameTab);
-    dlcImportButton_ = new QPushButton(QStringLiteral("Import DLC package or archive..."), gameTab);
+    dlcImportButton_ = new QPushButton(QStringLiteral("Import DLC or title update..."), gameTab);
+    {
+        // A file (one package, or an archive of them) or a folder whose
+        // packages are found in any subfolder.
+        auto *menu = new QMenu(dlcImportButton_);
+        menu->addAction(QStringLiteral("Package or archive (.zip, .rar, .7z)..."), this,
+                        [this]() { onDlcImportClicked(false); });
+        menu->addAction(QStringLiteral("Folder (searches subfolders)..."), this,
+                        [this]() { onDlcImportClicked(true); });
+        dlcImportButton_->setMenu(menu);
+    }
     commandLabel_ = new QLabel(gameTab);
     commandLabel_->setObjectName(QStringLiteral("commandLabel"));
     commandLabel_->setWordWrap(true);
@@ -118,7 +129,6 @@ MainWindow::MainWindow(QWidget *parent)
     tabs->addTab(gameTab, QStringLiteral("Game"));
     connect(playButton_, &QPushButton::clicked, this, &MainWindow::onPlayClicked);
     connect(importButton_, &QPushButton::clicked, this, &MainWindow::onImportClicked);
-    connect(dlcImportButton_, &QPushButton::clicked, this, &MainWindow::onDlcImportClicked);
 
     // ---------------- Settings tab ----------------
     // Every option the runtime accepts, in four sections. The page
@@ -277,7 +287,7 @@ MainWindow::MainWindow(QWidget *parent)
         titleUpdateCheck_ = new QCheckBox(advancedBox);
         addSettingRow(advanced, QStringLiteral("Use title update"), titleUpdateCheck_,
                       QStringLiteral("When the game's title update is installed (import its "
-                                     "TU_ package with Import DLC), start the build made from "
+                                     "TU_ package with Import DLC or title update), start the build made from "
                                      "it. Off = always the original release."));
     }
     pageLayout->addWidget(advancedBox);
@@ -780,7 +790,7 @@ QString MainWindow::effectiveUserDataRoot() const
     return QDir(base).filePath(profile_.exeName);
 }
 
-void MainWindow::onDlcImportClicked()
+void MainWindow::onDlcImportClicked(bool pickFolder)
 {
     settings_ = collectSettings();
     settings_.save();
@@ -789,9 +799,14 @@ void MainWindow::onDlcImportClicked()
     // with: the Save data folder setting, or the runtime's default.
     const QString root = effectiveUserDataRoot();
 
-    const QString picked = QFileDialog::getOpenFileName(
-        this, QStringLiteral("Select DLC package or archive"), QDir::homePath(),
-        QStringLiteral("All files (*);;Archives (*.rar *.zip *.7z)"));
+    const QString picked =
+        pickFolder
+            ? QFileDialog::getExistingDirectory(
+                  this, QStringLiteral("Select a folder with DLC or title update packages"),
+                  QDir::homePath())
+            : QFileDialog::getOpenFileName(
+                  this, QStringLiteral("Select a DLC or title update package, or an archive"),
+                  QDir::homePath(), QStringLiteral("All files (*);;Archives (*.rar *.zip *.7z)"));
     if (picked.isEmpty())
         return;
 

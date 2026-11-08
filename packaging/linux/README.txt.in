@@ -39,8 +39,9 @@ SETTINGS (all optional, saved automatically, Reset button included)
 GOOD TO KNOW
   - Online versus is stubbed out: this is an offline build
     (single player and local play work).
-  - DLC: if you have the add-on packages, use "Import DLC package or
-    archive..." (a package, a folder, or a .rar/.zip/.7z of them).
+  - DLC: if you have the add-on packages, use "Import DLC or title
+    update..." and pick a package, a .rar/.zip/.7z of them, or a
+    folder (its subfolders are searched).
     All 18 add-ons load; the launcher also restores the real names of
     the later add-ons' parts, which the original release would
     otherwise show as "Text<number>".

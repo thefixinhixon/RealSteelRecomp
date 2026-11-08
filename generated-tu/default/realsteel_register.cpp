@@ -6592,6 +6592,7 @@ void realsteel_RegisterFunctions(rex::runtime::IModuleRegistrar* registrar) {
   registrar->SetFunction(0x821B1648, sub_821B1648);
   registrar->SetFunction(0x821B1F18, sub_821B1F18);
   registrar->SetFunction(0x821B2018, sub_821B2018);
+  registrar->SetFunction(0x821B2350, sub_821B2350);
   registrar->SetFunction(0x821B2360, sub_821B2360);
   registrar->SetFunction(0x821B2448, sub_821B2448);
   registrar->SetFunction(0x821B24E8, sub_821B24E8);
