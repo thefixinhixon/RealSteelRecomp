@@ -1,0 +1,68 @@
+Factual Metal Launcher - Real Steel (Linux, x86_64) @VERSION@
+==========================================================
+
+A native Linux port of Yuke's "Real Steel" (Xbox 360 XBLA,
+title ID 584111E0), recompiled with the ReXGlue SDK, with a bespoke
+Qt launcher. One AppImage contains the launcher and the game program;
+it does NOT contain any game data.
+
+YOU NEED: your own legally obtained XBLA package of Real Steel
+(the STFS package file for title 584111E0). The import accepts the
+package file directly, or a .rar / .zip / .7z archive containing
+it. No game data is included and none will be downloaded.
+
+FIRST RUN
+  1. Run RealSteel-x86_64-@VERSION@.AppImage.
+  2. Click "Import XBLA package or archive..." and pick your
+     package file or archive. It is extracted to a data folder
+     you choose.
+  3. Click PLAY.
+
+GAME SPEED
+  Real Steel's game logic advances once per frame, so the game runs
+  at its real speed only at 60 fps. Keep Settings > Frame limit at 60
+  (the default). Lower frame rates play in slow motion; "unlimited"
+  runs the game too fast. VSync is on by default and only removes
+  tearing - it never slows the game down.
+
+SETTINGS (all optional, saved automatically, Reset button included)
+  Graphics: internal resolution scale (720p/1440p/2160p), AMD FSR or
+  bilinear upscaling, FXAA, native 2x MSAA, anisotropic filtering,
+  async shader compilation, vsync, fullscreen/windowed, frame limit.
+  On a weak or integrated GPU: keep 720p (1x) and pick Bilinear
+  upscaling - FSR runs at your full display resolution every frame.
+  Audio: mute.
+  Storage: choose where saves/profile data and log files are stored.
+  Advanced: Vulkan options and profile locale - leave these alone
+  unless you are experimenting.
+
+GOOD TO KNOW
+  - Online versus is stubbed out: this is an offline build
+    (single player and local play work).
+  - The DLC fighters were separate downloads on the Xbox 360 and
+    are not part of the base package, so those roster slots stay
+    locked unless you supply data that includes them.
+
+REQUIREMENTS
+  - 64-bit Linux (x86_64) with a Vulkan-capable GPU and driver.
+  - A gamepad is strongly recommended (Xbox-style pads work).
+  - Compatibility note: this build was produced on Ubuntu 26.04 and
+    needs glibc 2.43 or newer.
+
+TROUBLESHOOTING
+  - If the game ever fails to start after a crash, remove any stale
+    xenia_memory_* files from /dev/shm and run it again.
+  - Logs: see the logs folder inside your data folder
+    (last-command.txt shows the exact launch arguments).
+  - Frame-rate diagnostics: add --rs_perf_log=true to the game's
+    command line; the log then shows fps every 2 seconds.
+
+CREDITS & LICENSES
+  This project's own code is BSD 3-Clause. Full attribution for
+  every library and tool used (ReXGlue SDK, Qt, 7-Zip, FidelityFX,
+  FFmpeg, SDL and more) is inside the AppImage under
+  usr/share/licenses/realsteel/ and in CREDITS.md in the source
+  repository: https://github.com/thefixinhixon/RealSteelRecomp
+
+No game data, artwork, or other assets from the original game are
+distributed with this package.
