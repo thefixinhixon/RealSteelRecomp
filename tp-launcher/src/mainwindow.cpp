@@ -146,9 +146,6 @@ MainWindow::MainWindow(QWidget *parent)
     anisotropicSpin_->setSpecialValueText(QStringLiteral("Game default"));
     nativeMsaaCheck_ = new QCheckBox(graphicsBox);
     asyncShadersCheck_ = new QCheckBox(graphicsBox);
-    pipelineThreadsSpin_ = new QSpinBox(graphicsBox);
-    pipelineThreadsSpin_->setRange(0, 32);
-    pipelineThreadsSpin_->setSpecialValueText(QStringLiteral("Default"));
     vsyncCheck_ = new QCheckBox(graphicsBox);
     frameLimitSpin_ = new QSpinBox(graphicsBox);
     frameLimitSpin_->setRange(0, 1000);
@@ -175,16 +172,22 @@ MainWindow::MainWindow(QWidget *parent)
                   QStringLiteral("Compile shaders in the background. On: fewer long "
                                  "hitches, brief pop-in possible while shaders finish. "
                                  "Off: everything compiles up front."));
-    addSettingRow(graphics, QStringLiteral("Pipeline creation threads"), pipelineThreadsSpin_,
-                  QStringLiteral("CPU threads used to build graphics pipelines. 0 = "
-                                 "runtime default. More can reduce load-time hitching "
-                                 "on many-core CPUs."));
+#if defined(TP_GAME_REALSTEEL)
+    addSettingRow(graphics, QStringLiteral("VSync"), vsyncCheck_,
+                  QStringLiteral("Sync presentation to your display. On: no tearing. "
+                                 "It never slows the game down."));
+    addSettingRow(graphics, QStringLiteral("Frame limit"), frameLimitSpin_,
+                  QStringLiteral("Real Steel's game speed is tied to its frame rate: "
+                                 "keep this at 60. Anything else runs the whole game "
+                                 "faster or slower (0 = unlimited)."));
+#else
     addSettingRow(graphics, QStringLiteral("VSync"), vsyncCheck_,
                   QStringLiteral("Match frame output to your display's refresh. On: no "
                                  "tearing, slightly more input lag. Off: fastest, may tear."));
     addSettingRow(graphics, QStringLiteral("Frame limit"), frameLimitSpin_,
                   QStringLiteral("Cap the frame rate. 0 = unlimited. Matching your "
                                  "monitor's refresh (e.g. 75) is a good middle ground."));
+#endif
     addSettingRow(graphics, QStringLiteral("Windowed"), windowedCheck_,
                   QStringLiteral("Run fullscreen or in a window."));
     pageLayout->addWidget(graphicsBox);
@@ -192,37 +195,9 @@ MainWindow::MainWindow(QWidget *parent)
     // --- Audio ---
     auto *audioBox = new QGroupBox(QStringLiteral("Audio"), page);
     auto *audio = new QFormLayout(audioBox);
-    audioGainSpin_ = new QDoubleSpinBox(audioBox);
-    audioGainSpin_->setRange(0.0, 2.0);
-    audioGainSpin_->setSingleStep(0.05);
-    audioGainSpin_->setDecimals(2);
-    audioHighpassSpin_ = new QSpinBox(audioBox);
-    audioHighpassSpin_->setRange(0, 500);
-    audioHighpassSpin_->setSuffix(QStringLiteral(" Hz"));
-    forceStereoCheck_ = new QCheckBox(audioBox);
-    frontOnlyCheck_ = new QCheckBox(audioBox);
-    audioMaxQFramesSpin_ = new QSpinBox(audioBox);
-    audioMaxQFramesSpin_->setRange(0, 1024);
-    audioMaxQFramesSpin_->setSpecialValueText(QStringLiteral("Default"));
-    xmaWorkerCheck_ = new QCheckBox(audioBox);
-
-    addSettingRow(audio, QStringLiteral("Audio gain"), audioGainSpin_,
-                  QStringLiteral("Master volume. 1.00 is the game's original level."));
-    addSettingRow(audio, QStringLiteral("Audio highpass"), audioHighpassSpin_,
-                  QStringLiteral("Removes bass/rumble below this frequency. 0 = full "
-                                 "range, filter off."));
-    addSettingRow(audio, QStringLiteral("Force stereo"), forceStereoCheck_,
-                  QStringLiteral("Downmix surround to stereo. Useful on stereo "
-                                 "speakers/headphones with odd channel mapping."));
-    addSettingRow(audio, QStringLiteral("Front speakers only"), frontOnlyCheck_,
-                  QStringLiteral("Play audio only from the front speakers. A "
-                                 "workaround for broken surround setups."));
-    addSettingRow(audio, QStringLiteral("Audio queue frames"), audioMaxQFramesSpin_,
-                  QStringLiteral("Audio buffering depth. 0 = runtime default. Raise "
-                                 "it if you hear crackling or dropouts."));
-    addSettingRow(audio, QStringLiteral("XMA worker thread"), xmaWorkerCheck_,
-                  QStringLiteral("Decode the game's XMA audio on a worker thread. "
-                                 "Leave on unless audio misbehaves."));
+    audioMuteCheck_ = new QCheckBox(audioBox);
+    addSettingRow(audio, QStringLiteral("Mute audio"), audioMuteCheck_,
+                  QStringLiteral("Start the game with all sound off."));
     pageLayout->addWidget(audioBox);
 
     // --- Storage & logs ---
@@ -314,16 +289,10 @@ MainWindow::MainWindow(QWidget *parent)
     connect(anisotropicSpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
     connect(nativeMsaaCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
     connect(asyncShadersCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
-    connect(pipelineThreadsSpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
     connect(vsyncCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
     connect(frameLimitSpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
     connect(windowedCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
-    connect(audioGainSpin_, &QDoubleSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
-    connect(audioHighpassSpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
-    connect(forceStereoCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
-    connect(frontOnlyCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
-    connect(audioMaxQFramesSpin_, &QSpinBox::valueChanged, this, &MainWindow::onSettingsChanged);
-    connect(xmaWorkerCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
+    connect(audioMuteCheck_, &QCheckBox::toggled, this, &MainWindow::onSettingsChanged);
     connect(userDataRootEdit_, &QLineEdit::textChanged, this, &MainWindow::onSettingsChanged);
     connect(logDirEdit_, &QLineEdit::textChanged, this, &MainWindow::onSettingsChanged);
     connect(logLevelCombo_, &QComboBox::currentIndexChanged, this, &MainWindow::onSettingsChanged);
@@ -342,11 +311,9 @@ void MainWindow::loadSettingsIntoUi()
         QSignalBlocker(resolutionCombo_), QSignalBlocker(upscalingCombo_),
         QSignalBlocker(postEffectCombo_), QSignalBlocker(anisotropicSpin_),
         QSignalBlocker(nativeMsaaCheck_), QSignalBlocker(asyncShadersCheck_),
-        QSignalBlocker(pipelineThreadsSpin_), QSignalBlocker(vsyncCheck_),
+        QSignalBlocker(vsyncCheck_),
         QSignalBlocker(frameLimitSpin_),  QSignalBlocker(windowedCheck_),
-        QSignalBlocker(audioGainSpin_),   QSignalBlocker(audioHighpassSpin_),
-        QSignalBlocker(forceStereoCheck_), QSignalBlocker(frontOnlyCheck_),
-        QSignalBlocker(audioMaxQFramesSpin_), QSignalBlocker(xmaWorkerCheck_),
+        QSignalBlocker(audioMuteCheck_),
         QSignalBlocker(userDataRootEdit_), QSignalBlocker(logDirEdit_),
         QSignalBlocker(logLevelCombo_),   QSignalBlocker(sparseMemoryCheck_),
         QSignalBlocker(asyncSkipCheck_),  QSignalBlocker(userLanguageSpin_),
@@ -372,16 +339,10 @@ void MainWindow::loadSettingsIntoUi()
     anisotropicSpin_->setValue(settings_.anisotropic);
     nativeMsaaCheck_->setChecked(settings_.native2xMsaa);
     asyncShadersCheck_->setChecked(settings_.asyncShaderCompilation);
-    pipelineThreadsSpin_->setValue(settings_.pipelineThreads);
     vsyncCheck_->setChecked(settings_.vsync);
     frameLimitSpin_->setValue(settings_.frameLimit);
     windowedCheck_->setChecked(settings_.windowed);
-    audioGainSpin_->setValue(settings_.audioGain);
-    audioHighpassSpin_->setValue(settings_.audioHighpassHz);
-    forceStereoCheck_->setChecked(settings_.audioForceStereo);
-    frontOnlyCheck_->setChecked(settings_.audioFrontOnly);
-    audioMaxQFramesSpin_->setValue(settings_.audioMaxQFrames);
-    xmaWorkerCheck_->setChecked(settings_.xmaWorker);
+    audioMuteCheck_->setChecked(settings_.audioMute);
     userDataRootEdit_->setText(settings_.userDataRoot);
     logDirEdit_->setText(settings_.logDir);
     const int levelIndex = logLevelCombo_->findData(settings_.logLevel);
@@ -406,17 +367,11 @@ GameSettings MainWindow::collectSettings() const
     s.anisotropic = anisotropicSpin_->value();
     s.native2xMsaa = nativeMsaaCheck_->isChecked();
     s.asyncShaderCompilation = asyncShadersCheck_->isChecked();
-    s.pipelineThreads = pipelineThreadsSpin_->value();
     s.vsync = vsyncCheck_->isChecked();
     s.frameLimit = frameLimitSpin_->value();
     s.windowed = windowedCheck_->isChecked();
     // Audio
-    s.audioGain = audioGainSpin_->value();
-    s.audioHighpassHz = audioHighpassSpin_->value();
-    s.audioForceStereo = forceStereoCheck_->isChecked();
-    s.audioFrontOnly = frontOnlyCheck_->isChecked();
-    s.audioMaxQFrames = audioMaxQFramesSpin_->value();
-    s.xmaWorker = xmaWorkerCheck_->isChecked();
+    s.audioMute = audioMuteCheck_->isChecked();
     // Storage & logs
     s.userDataRoot = userDataRootEdit_->text().trimmed();
     s.logDir = logDirEdit_->text().trimmed();

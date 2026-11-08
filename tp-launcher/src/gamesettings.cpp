@@ -28,17 +28,11 @@ GameSettings GameSettings::load()
     s.anisotropic     = q->value(QStringLiteral("anisotropic_override"), s.anisotropic).toInt();
     s.native2xMsaa    = q->value(QStringLiteral("native_2x_msaa"), s.native2xMsaa).toBool();
     s.asyncShaderCompilation = q->value(QStringLiteral("async_shader_compilation"), s.asyncShaderCompilation).toBool();
-    s.pipelineThreads = q->value(QStringLiteral("vulkan_pipeline_creation_threads"), s.pipelineThreads).toInt();
     s.vsync           = q->value(QStringLiteral("vsync"), s.vsync).toBool();
     s.frameLimit      = q->value(QStringLiteral("frame_limit"), s.frameLimit).toInt();
     s.windowed        = q->value(QStringLiteral("windowed"), s.windowed).toBool();
     // Audio
-    s.audioGain       = q->value(QStringLiteral("audio_gain"), s.audioGain).toDouble();
-    s.audioHighpassHz = q->value(QStringLiteral("audio_highpass_hz"), s.audioHighpassHz).toInt();
-    s.audioForceStereo = q->value(QStringLiteral("audio_force_stereo"), s.audioForceStereo).toBool();
-    s.audioFrontOnly   = q->value(QStringLiteral("audio_front_only"), s.audioFrontOnly).toBool();
-    s.audioMaxQFrames  = q->value(QStringLiteral("audio_maxqframes"), s.audioMaxQFrames).toInt();
-    s.xmaWorker        = q->value(QStringLiteral("xma_worker"), s.xmaWorker).toBool();
+    s.audioMute       = q->value(QStringLiteral("audio_mute"), s.audioMute).toBool();
     // Storage & logs
     s.userDataRoot    = q->value(QStringLiteral("user_data_root"), s.userDataRoot).toString();
     s.logDir          = q->value(QStringLiteral("log_dir"), s.logDir).toString();
@@ -48,7 +42,27 @@ GameSettings GameSettings::load()
     s.asyncSkipIncompleteFrames = q->value(QStringLiteral("vulkan_async_skip_incomplete_frames"), s.asyncSkipIncompleteFrames).toBool();
     s.userLanguage    = q->value(QStringLiteral("user_language"), s.userLanguage).toInt();
     s.userCountry     = q->value(QStringLiteral("user_country"), s.userCountry).toInt();
+    const int storedVersion = q->value(QStringLiteral("settings_version"), 1).toInt();
     q->endGroup();
+
+    if (storedVersion < kSettingsVersion) {
+#if defined(TP_GAME_REALSTEEL)
+        // v1 shipped frame_limit = 0 (unlimited) with vsync off, which left
+        // the game unpaced: too fast in light scenes, slow motion in heavy
+        // ones. Move existing users to the paced defaults once.
+        GameSettings defaults;
+        s.frameLimit = defaults.frameLimit;
+        s.vsync = defaults.vsync;
+#endif
+        // Drop keys for options the runtime never had.
+        q->beginGroup(QStringLiteral("settings"));
+        for (const char *dead : {"audio_gain", "audio_highpass_hz", "audio_force_stereo",
+                                 "audio_front_only", "audio_maxqframes", "xma_worker",
+                                 "vulkan_pipeline_creation_threads"})
+            q->remove(QLatin1String(dead));
+        q->endGroup();
+        s.save();
+    }
     return s;
 }
 
@@ -63,17 +77,11 @@ void GameSettings::save() const
     q->setValue(QStringLiteral("anisotropic_override"), anisotropic);
     q->setValue(QStringLiteral("native_2x_msaa"), native2xMsaa);
     q->setValue(QStringLiteral("async_shader_compilation"), asyncShaderCompilation);
-    q->setValue(QStringLiteral("vulkan_pipeline_creation_threads"), pipelineThreads);
     q->setValue(QStringLiteral("vsync"), vsync);
     q->setValue(QStringLiteral("frame_limit"), frameLimit);
     q->setValue(QStringLiteral("windowed"), windowed);
     // Audio
-    q->setValue(QStringLiteral("audio_gain"), audioGain);
-    q->setValue(QStringLiteral("audio_highpass_hz"), audioHighpassHz);
-    q->setValue(QStringLiteral("audio_force_stereo"), audioForceStereo);
-    q->setValue(QStringLiteral("audio_front_only"), audioFrontOnly);
-    q->setValue(QStringLiteral("audio_maxqframes"), audioMaxQFrames);
-    q->setValue(QStringLiteral("xma_worker"), xmaWorker);
+    q->setValue(QStringLiteral("audio_mute"), audioMute);
     // Storage & logs
     q->setValue(QStringLiteral("user_data_root"), userDataRoot);
     q->setValue(QStringLiteral("log_dir"), logDir);
@@ -83,6 +91,7 @@ void GameSettings::save() const
     q->setValue(QStringLiteral("vulkan_async_skip_incomplete_frames"), asyncSkipIncompleteFrames);
     q->setValue(QStringLiteral("user_language"), userLanguage);
     q->setValue(QStringLiteral("user_country"), userCountry);
+    q->setValue(QStringLiteral("settings_version"), kSettingsVersion);
     q->endGroup();
     q->sync();
 }

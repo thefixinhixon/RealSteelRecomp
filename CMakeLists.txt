@@ -42,3 +42,22 @@ if(TARGET imgui::imgui)
 elseif(TARGET imgui)
     target_link_libraries(realsteel PRIVATE imgui)
 endif()
+
+# Keep the runtime libraries next to the executable after every build, so the
+# build folder is a runnable, matched set (the exe uses RUNPATH=$ORIGIN, and
+# mixing an exe with runtime libraries from a different build corrupts the
+# heap). A separate always-run target: a POST_BUILD step on the exe would miss
+# rebuilds that only touch a library (e.g. the GPU plugin).
+set(_rs_runtime_copy_commands "")
+foreach(_rs_runtime_lib rexruntime rexgpu-xenos)
+    if(TARGET ${_rs_runtime_lib})
+        list(APPEND _rs_runtime_copy_commands
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    $<TARGET_FILE:${_rs_runtime_lib}> $<TARGET_FILE_DIR:realsteel>)
+        list(APPEND _rs_runtime_copy_deps ${_rs_runtime_lib})
+    endif()
+endforeach()
+if(_rs_runtime_copy_commands)
+    add_custom_target(realsteel_runtime_libs ALL ${_rs_runtime_copy_commands} VERBATIM)
+    add_dependencies(realsteel_runtime_libs realsteel ${_rs_runtime_copy_deps})
+endif()

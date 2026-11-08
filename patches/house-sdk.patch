@@ -1,3 +1,22 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9b3cdf5..010a560 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -186,9 +186,13 @@ add_compile_definitions(REXGLUE_BUILD_CONFIG="$<CONFIG>")
+ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/rex_pch.cmake)
+ 
+ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/rex_version.cmake)
++# HOUSE: describe the SDK's own tree. The default (CMAKE_SOURCE_DIR) is the
++# game repo when the SDK is pulled in with add_subdirectory, and a game's own
++# release tags (e.g. v1.0) then fail the version floor check.
+ rex_resolve_version(REXGLUE_FULL_VERSION
+     FLOOR_MAJOR ${PROJECT_VERSION_MAJOR}
+-    FLOOR_MINOR ${PROJECT_VERSION_MINOR})
++    FLOOR_MINOR ${PROJECT_VERSION_MINOR}
++    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+ 
+ # Strip the -id trailer (if any) for the numeric-only version.
+ string(REGEX REPLACE "-.*$" "" REXGLUE_NUMERIC_VERSION "${REXGLUE_FULL_VERSION}")
 diff --git a/cmake/rexglue_fidelityfx.cmake b/cmake/rexglue_fidelityfx.cmake
 index af35fa8..0ab179e 100644
 --- a/cmake/rexglue_fidelityfx.cmake
@@ -24,7 +43,7 @@ index af35fa8..0ab179e 100644
      "Root of the fetched FidelityFX SDK source tree")
  
 diff --git a/include/rex/graphics/command_processor.h b/include/rex/graphics/command_processor.h
-index da8e432..26b6205 100644
+index da8e432..bad6952 100644
 --- a/include/rex/graphics/command_processor.h
 +++ b/include/rex/graphics/command_processor.h
 @@ -12,6 +12,8 @@
@@ -69,7 +88,7 @@ index da8e432..26b6205 100644
    // "Actual" is for the command processor thread, to be read by the
    // implementations.
    SwapPostEffect GetActualSwapPostEffect() const { return swap_post_effect_actual_; }
-@@ -243,7 +260,13 @@ class CommandProcessor {
+@@ -243,7 +260,14 @@ class CommandProcessor {
    // MicroEngine binary from PM4_ME_INIT
    std::vector<uint32_t> me_bin_;
  
@@ -81,6 +100,7 @@ index da8e432..26b6205 100644
 +  std::atomic<uint32_t> vblank_counter_ = 0;
 +  uint32_t last_swap_vblank_tick_ = 0;
 +  std::chrono::steady_clock::time_point last_swap_time_{};
++  int32_t last_frame_limit_ = 0;
  
    uint32_t primary_buffer_ptr_ = 0;
    uint32_t primary_buffer_size_ = 0;
@@ -140,10 +160,19 @@ index 4d845c7..c6fb795 100644
    static constexpr uint32_t kLoadGuestYBlocksPerGroupLog2 = 5;
  
 diff --git a/include/rex/graphics/flags.h b/include/rex/graphics/flags.h
-index 2cf24c4..3c4b107 100644
+index 2cf24c4..6b9173c 100644
 --- a/include/rex/graphics/flags.h
 +++ b/include/rex/graphics/flags.h
-@@ -63,6 +63,9 @@ REXCVAR_DECLARE(bool, force_convert_quad_lists_to_triangle_lists);
+@@ -15,6 +15,8 @@
+ 
+ // GPU Core
+ REXCVAR_DECLARE(bool, vsync);
++REXCVAR_DECLARE(bool, vsync_swap_wait);
++REXCVAR_DECLARE(int32_t, frame_limit);
+ REXCVAR_DECLARE(bool, clear_memory_page_state);
+ REXCVAR_DECLARE(bool, half_pixel_offset);
+ REXCVAR_DECLARE(bool, async_shader_compilation);
+@@ -63,6 +65,9 @@ REXCVAR_DECLARE(bool, force_convert_quad_lists_to_triangle_lists);
  REXCVAR_DECLARE(bool, force_convert_triangle_fans_to_lists);
  REXCVAR_DECLARE(int32_t, primitive_processor_cache_min_indices);
  
@@ -1054,6 +1083,192 @@ index 228728d..8424fb3 100644
      return std::nullopt;
    }
    size_t pos = storage.size();
+diff --git a/src/core/threading_posix.cpp b/src/core/threading_posix.cpp
+index 9ac8d15..be83c4d 100644
+--- a/src/core/threading_posix.cpp
++++ b/src/core/threading_posix.cpp
+@@ -267,6 +267,40 @@ static sem_t* RexCreateAnonymousSemaphore() {
+ }
+ #endif  // __APPLE__
+ 
++// HOUSE: wake-up hub for multi-object waits.
++// PosixConditionBase::WaitMultiple used to poll every handle with 1 ms
++// sleeps. The remaining time was truncated to whole milliseconds, so the last
++// partial millisecond of every slice became sleep_for(0): an alertable
++// WaitAny (sliced into 1 ms pieces) spun a core for its entire timeout (the
++// audio worker sat in that loop permanently), and every guest
++// WaitForMultipleObjects paid up to 1 ms of extra wake latency. Every state
++// change that can satisfy a wait now bumps an epoch here, and multi-waiters
++// sleep on this condition variable until the epoch moves.
++namespace {
++struct MultiWaitHub {
++  std::mutex mutex;
++  std::condition_variable cv;
++  std::atomic<uint64_t> epoch{0};
++  std::atomic<int> waiters{0};
++};
++MultiWaitHub& GetMultiWaitHub() {
++  static MultiWaitHub hub;
++  return hub;
++}
++// Upper bound on one hub sleep, as a safety net for any wake source that
++// does not go through NotifyMultiWaiters(). Real wake-ups are immediate.
++constexpr auto kMultiWaitSafetySlice = std::chrono::milliseconds(10);
++}  // namespace
++
++static inline void NotifyMultiWaiters() {
++  auto& hub = GetMultiWaitHub();
++  hub.epoch.fetch_add(1, std::memory_order_seq_cst);
++  if (hub.waiters.load(std::memory_order_seq_cst) > 0) {
++    std::lock_guard<std::mutex> lock(hub.mutex);
++    hub.cv.notify_all();
++  }
++}
++
+ class PosixConditionBase {
+  public:
+   PosixConditionBase() {
+@@ -335,7 +369,17 @@ class PosixConditionBase {
+                         ? std::chrono::steady_clock::time_point::max()
+                         : start_time + timeout;
+ 
++    auto& hub = GetMultiWaitHub();
++    hub.waiters.fetch_add(1, std::memory_order_seq_cst);
++    struct WaiterGuard {
++      MultiWaitHub& hub;
++      ~WaiterGuard() { hub.waiters.fetch_sub(1, std::memory_order_seq_cst); }
++    } waiter_guard{hub};
++
+     while (true) {
++      // Read the epoch before checking the handles: a signal that lands after
++      // the check moves the epoch, so the sleep below cannot miss it.
++      const uint64_t epoch = hub.epoch.load(std::memory_order_seq_cst);
+       size_t first_signaled = std::numeric_limits<size_t>::max();
+       bool condition_met = false;
+       bool all_locked = true;
+@@ -411,13 +455,14 @@ class PosixConditionBase {
+         return std::make_pair<WaitResult, size_t>(WaitResult::kTimeout, 0);
+       }
+ 
+-      if (timeout == std::chrono::milliseconds::max()) {
+-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+-      } else {
+-        auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - now);
+-        auto sleep_time = std::min(remaining, std::chrono::milliseconds(1));
+-        std::this_thread::sleep_for(sleep_time);
+-      }
++      // Sleep until any condition changes (or the deadline / safety slice).
++      // Full time_point precision: no truncation to whole milliseconds.
++      const auto wake_time =
++          (end_time - now > kMultiWaitSafetySlice) ? now + kMultiWaitSafetySlice : end_time;
++      std::unique_lock<std::mutex> hub_lock(hub.mutex);
++      hub.cv.wait_until(hub_lock, wake_time, [&hub, epoch] {
++        return hub.epoch.load(std::memory_order_seq_cst) != epoch;
++      });
+     }
+   }
+ 
+@@ -450,6 +495,7 @@ class PosixCondition<Event> : public PosixConditionBase {
+     auto lock = std::unique_lock<std::mutex>(mutex_);
+     signal_ = true;
+     cond_.notify_all();
++    NotifyMultiWaiters();
+     return true;
+   }
+ 
+@@ -487,6 +533,7 @@ class PosixCondition<Semaphore> : public PosixConditionBase {
+     }
+     count_ += release_count;
+     cond_.notify_all();
++    NotifyMultiWaiters();
+     return true;
+   }
+ 
+@@ -519,6 +566,7 @@ class PosixCondition<Mutant> : public PosixConditionBase {
+       // Free to be acquired by another thread
+       if (count_ == 0) {
+         cond_.notify_all();
++        NotifyMultiWaiters();
+       }
+       return true;
+     }
+@@ -551,6 +599,7 @@ class PosixCondition<Timer> : public PosixConditionBase {
+     std::lock_guard<std::mutex> lock(mutex_);
+     signal_ = true;
+     cond_.notify_all();
++    NotifyMultiWaiters();
+     return true;
+   }
+ 
+@@ -979,6 +1028,7 @@ class PosixCondition<Thread> : public PosixConditionBase {
+       exit_code_ = exit_code;
+       signaled_ = true;
+       cond_.notify_all();
++      NotifyMultiWaiters();
+     }
+     if (is_current_thread) {
+       pthread_exit(reinterpret_cast<void*>(exit_code));
+@@ -1106,7 +1156,9 @@ std::chrono::milliseconds ComputeAlertableWaitTimeout(
+   if (deadline == std::chrono::steady_clock::time_point::max()) {
+     return kAlertablePollSlice;
+   }
+-  auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
++  // HOUSE: round up. Truncating made the final partial millisecond a
++  // zero-length wait, i.e. a busy spin until the deadline.
++  auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
+       deadline - std::chrono::steady_clock::now());
+   if (remaining <= std::chrono::milliseconds::zero()) {
+     return std::chrono::milliseconds::zero();
+@@ -1449,6 +1501,7 @@ void* PosixCondition<Thread>::ThreadStartRoutine(void* parameter) {
+     thread->handle_.exit_code_ = 0;
+     thread->handle_.signaled_ = true;
+     thread->handle_.cond_.notify_all();
++    NotifyMultiWaiters();
+   }
+ 
+   current_thread_ = nullptr;
+diff --git a/src/core/timer_queue.cpp b/src/core/timer_queue.cpp
+index 5cfea05..c40dfa8 100644
+--- a/src/core/timer_queue.cpp
++++ b/src/core/timer_queue.cpp
+@@ -15,7 +15,7 @@
+ #include <disruptorplus/multi_threaded_claim_strategy.hpp>
+ #include <disruptorplus/ring_buffer.hpp>
+ #include <disruptorplus/sequence_barrier.hpp>
+-#include <disruptorplus/spin_wait_strategy.hpp>
++#include <disruptorplus/blocking_wait_strategy.hpp>
+ 
+ #include <rex/assert.h>
+ #include <rex/thread.h>
+@@ -67,9 +67,12 @@ class TimerQueue {
+     while (!stop_token.stop_requested()) {
+       {
+         // Consume new wait items and add them to sorted wait queue
++        // Idle waits are capped (not time_point::max()) so the condition
++        // variable's deadline arithmetic can never overflow.
+         dp::sequence_t available = claim_strategy_.wait_until_published(
+             next_sequence, next_sequence - 1,
+-            wait_queue_.empty() ? clock::time_point::max() : wait_queue_.front()->due_);
++            wait_queue_.empty() ? clock::now() + std::chrono::milliseconds(100)
++                                : wait_queue_.front()->due_);
+ 
+         // Check for timeout
+         if (available != next_sequence - 1) {
+@@ -142,9 +145,11 @@ class TimerQueue {
+   // This ring buffer will be used to introduce timers queued by the public API
+   static constexpr size_t kWaitCount = 512;
+   dp::ring_buffer<std::shared_ptr<WaitItem>> buffer_;
+-  dp::spin_wait_strategy wait_strategy_;
+-  dp::multi_threaded_claim_strategy<dp::spin_wait_strategy> claim_strategy_;
+-  dp::sequence_barrier<dp::spin_wait_strategy> consumed_;
++  // HOUSE: blocking, not spinning. The spin strategy kept the timer thread
++  // ~30% busy (spin/yield/short sleeps) between timers for the whole session.
++  dp::blocking_wait_strategy wait_strategy_;
++  dp::multi_threaded_claim_strategy<dp::blocking_wait_strategy> claim_strategy_;
++  dp::sequence_barrier<dp::blocking_wait_strategy> consumed_;
+ 
+   // This is a _sorted_ (ascending due_) list of active timers managed by a
+   // dedicated thread
 diff --git a/src/filesystem/entry.cpp b/src/filesystem/entry.cpp
 index 163c257..c01e0e3 100644
 --- a/src/filesystem/entry.cpp
@@ -1089,10 +1304,10 @@ index 163c257..c01e0e3 100644
  }
  
 diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
-index a744375..09f04be 100644
+index a744375..991cbe3 100644
 --- a/src/graphics/command_processor.cpp
 +++ b/src/graphics/command_processor.cpp
-@@ -11,9 +11,12 @@
+@@ -11,9 +11,13 @@
  
  #include <algorithm>
  #include <cinttypes>
@@ -1102,10 +1317,11 @@ index a744375..09f04be 100644
  #include <string_view>
 +#include <thread>
 +#include <unordered_set>
++#include <vector>
  
  #include <fmt/format.h>
  
-@@ -24,6 +27,7 @@
+@@ -24,6 +28,7 @@
  #include <rex/graphics/command_processor.h>
  #include <rex/graphics/flags.h>
  #include <rex/graphics/graphics_system.h>
@@ -1113,7 +1329,11 @@ index a744375..09f04be 100644
  #include <rex/graphics/pipeline/texture/info.h>
  #include <rex/graphics/sampler_info.h>
  #include <rex/graphics/xenos.h>
-@@ -37,6 +41,16 @@
+@@ -34,9 +39,34 @@
+ #include <rex/stream.h>
+ #include <rex/system/kernel_state.h>
+ #include <rex/system/user_module.h>
++#include <rex/chrono/clock.h>
  
  REXCVAR_DEFINE_BOOL(vsync, true, "GPU", "Enable vertical sync");
  
@@ -1122,7 +1342,21 @@ index a744375..09f04be 100644
 +                     "swaps so game speed stays correct when vsync is off or "
 +                     "on high-refresh displays.");
 +
-+REXCVAR_DEFINE_BOOL(vfetch_oob_trace, true, "Diagnostics",
++REXCVAR_DEFINE_BOOL(rs_perf_log, false, "Diagnostics",
++                    "Log guest frame pacing every 2 s: swaps/s, vblanks/s, frame "
++                    "interval avg/max, frame-limiter sleep and guest clock rate.");
++
++REXCVAR_DEFINE_BOOL(vsync_swap_wait, false, "GPU",
++                    "With vsync on, also hold each guest swap until a new guest "
++                    "vblank. Off by default: a frame that misses 16.7 ms then "
++                    "waits a whole extra vblank (30 fps), and frame-locked games "
++                    "like Real Steel run at half speed. The frame limiter paces "
++                    "the guest instead; the presenter still syncs to the display.");
++
++// HOUSE: off by default. It walks every index of every draw on the GPU
++// command thread, and its only output is DEBUG-level (compiled out of
++// release logging) - an ~11% frame-time cost for nothing in normal play.
++REXCVAR_DEFINE_BOOL(vfetch_oob_trace, false, "Diagnostics",
 +                    "Log draws whose vertex fetches read outside the declared "
 +                    "buffer bounds. Xenos returns 0 for OOB vfetch words; "
 +                    "shared-memory loads return adjacent guest memory.");
@@ -1130,11 +1364,51 @@ index a744375..09f04be 100644
  REXCVAR_DEFINE_BOOL(clear_memory_page_state, true, "GPU",
                      "Refresh page-valid state from GPU-written memory at frame end. "
                      "Disable for minor CPU overhead reduction, but may break memory coherency.")
-@@ -958,9 +972,43 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
+@@ -355,7 +385,17 @@ void CommandProcessor::WriteRegister(uint32_t index, uint32_t value) {
+ 
+   // Volatile for the WAIT_REG_MEM loop.
+   const_cast<volatile uint32_t&>(regs.values[index]) = value;
+-  if (!regs.GetRegisterInfo(index)) {
++  // HOUSE: this runs for every register write (thousands per frame). Look the
++  // register up in a table built once instead of walking the ~1000-case
++  // GetRegisterInfo switch (with a static-init guard per case) each time.
++  static const std::vector<bool> known_registers = [] {
++    std::vector<bool> known(RegisterFile::kRegisterCount);
++    for (uint32_t i = 0; i < RegisterFile::kRegisterCount; ++i) {
++      known[i] = RegisterFile::GetRegisterInfo(i) != nullptr;
++    }
++    return known;
++  }();
++  if (!known_registers[index]) {
+     REXGPU_DEBUG("GPU: Write to unknown register ({:04X} = {:08X})", index, value);
+   }
+ 
+@@ -702,10 +742,16 @@ bool CommandProcessor::ExecutePacketType0(memory::RingBuffer* reader, uint32_t p
+ 
+   uint32_t base_index = (packet & 0x7FFF);
+   uint32_t write_one_reg = (packet >> 15) & 0x1;
+-  for (uint32_t m = 0; m < count; m++) {
+-    uint32_t reg_data = reader->ReadAndSwap<uint32_t>();
+-    uint32_t target_index = write_one_reg ? base_index : base_index + m;
+-    WriteRegister(target_index, reg_data);
++  if (write_one_reg) {
++    for (uint32_t m = 0; m < count; m++) {
++      WriteRegister(base_index, reader->ReadAndSwap<uint32_t>());
++    }
++  } else {
++    // HOUSE: consecutive registers go through the batched path (as in
++    // Xenia-Canary). Backends bulk-copy shader-constant ranges - the bulk of
++    // type-0 traffic - and fall back to per-register writes for anything
++    // with side effects, so behaviour is unchanged.
++    WriteRegisterRangeFromRing(reader, base_index, count);
+   }
+ 
+   return true;
+@@ -958,9 +1004,111 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
    uint32_t frontbuffer_height = reader->ReadAndSwap<uint32_t>();
    reader->AdvanceRead((count - 4) * sizeof(uint32_t));
  
-+  if (REXCVAR_GET(vsync)) {
++  if (REXCVAR_GET(vsync) && REXCVAR_GET(vsync_swap_wait)) {
 +    // One swap per vblank tick, matching hardware flip timing. Blocking the
 +    // CP here paces the guest through ring-buffer backpressure.
 +    std::unique_lock<std::mutex> lock(vblank_mutex_);
@@ -1152,19 +1426,87 @@ index a744375..09f04be 100644
 +  // high-refresh displays this also keeps vsync-on pacing at a sane rate.
 +  // Sleeping here paces the guest through ring-buffer backpressure, the same
 +  // mechanism the vsync path uses.
++  // rs_perf_log: cheap pacing stats, CP thread only.
++  struct PacingStats {
++    std::chrono::steady_clock::time_point window_start{}, last_swap{};
++    uint64_t guest_ticks_start = 0;
++    uint32_t swaps = 0, vblank_start = 0;
++    int64_t max_interval_us = 0, sum_interval_us = 0, limiter_sleep_us = 0;
++    uint32_t over_20ms = 0, over_34ms = 0;
++  };
++  static PacingStats ps;
++  const bool perf_log = REXCVAR_GET(rs_perf_log);
++  const auto pre_limit = std::chrono::steady_clock::now();
++
 +  const int32_t frame_limit = REXCVAR_GET(frame_limit);
 +  if (frame_limit > 0) {
++    // HOUSE: fixed deadlines. The old limiter restarted its 16.67 ms window
++    // from "now" after every sleep, so each frame also paid the sleep's
++    // overshoot and the game settled below the limit (frame-locked game
++    // logic then ran slow). Deadlines now advance by exactly one period; a
++    // late frame resyncs instead of letting later frames race to catch up.
 +    using FrameClock = std::chrono::steady_clock;
-+    const auto min_frame_time =
-+        std::chrono::microseconds(1000000 / frame_limit);
++    const auto period = std::chrono::duration_cast<FrameClock::duration>(
++        std::chrono::duration<double>(1.0 / double(frame_limit)));
 +    const auto now = FrameClock::now();
-+    if (last_swap_time_ != FrameClock::time_point{}) {
-+      const auto earliest_next_swap = last_swap_time_ + min_frame_time;
-+      if (earliest_next_swap > now) {
-+        std::this_thread::sleep_until(earliest_next_swap);
++    if (last_swap_time_ == FrameClock::time_point{} || frame_limit != last_frame_limit_) {
++      last_swap_time_ = now;  // first frame / limit changed: start a new schedule
++    } else {
++      auto deadline = last_swap_time_ + period;
++      if (deadline > now) {
++        // Sleep to just short of the deadline, then spin the remainder:
++        // sleep_until alone overshoots by 50-100+ us on desktop kernels.
++        constexpr auto kSpinMargin = std::chrono::microseconds(500);
++        if (deadline - now > kSpinMargin) {
++          std::this_thread::sleep_until(deadline - kSpinMargin);
++        }
++        while (FrameClock::now() < deadline) {
++          std::this_thread::yield();
++        }
++        last_swap_time_ = deadline;
++      } else if (now - deadline > period) {
++        last_swap_time_ = now;  // more than a frame late: resync
++      } else {
++        last_swap_time_ = deadline;  // slightly late: keep the schedule
 +      }
 +    }
-+    last_swap_time_ = FrameClock::now();
++    last_frame_limit_ = frame_limit;
++  }
++
++  if (perf_log) {
++    const auto now = std::chrono::steady_clock::now();
++    if (ps.window_start == std::chrono::steady_clock::time_point{}) {
++      ps.window_start = ps.last_swap = now;
++      ps.guest_ticks_start = chrono::Clock::QueryGuestTickCount();
++      ps.vblank_start = vblank_counter_.load(std::memory_order_relaxed);
++    } else {
++      using us = std::chrono::microseconds;
++      int64_t interval = std::chrono::duration_cast<us>(now - ps.last_swap).count();
++      ps.last_swap = now;
++      ps.swaps++;
++      ps.sum_interval_us += interval;
++      ps.max_interval_us = std::max(ps.max_interval_us, interval);
++      if (interval > 20000) ps.over_20ms++;
++      if (interval > 34000) ps.over_34ms++;
++      ps.limiter_sleep_us += std::chrono::duration_cast<us>(now - pre_limit).count();
++      double window_s = std::chrono::duration<double>(now - ps.window_start).count();
++      if (window_s >= 2.0) {
++        uint64_t gticks = chrono::Clock::QueryGuestTickCount() - ps.guest_ticks_start;
++        uint32_t vb = vblank_counter_.load(std::memory_order_relaxed) - ps.vblank_start;
++        REXGPU_INFO(
++            "RSPERF swaps/s={:.1f} vblanks/s={:.1f} frame_avg_ms={:.2f} frame_max_ms={:.2f} "
++            ">20ms={} >34ms={} limiter_sleep_ms/frame={:.2f} guest_clock_rate={:.3f}",
++            ps.swaps / window_s, vb / window_s,
++            ps.swaps ? ps.sum_interval_us / 1000.0 / ps.swaps : 0.0, ps.max_interval_us / 1000.0,
++            ps.over_20ms, ps.over_34ms,
++            ps.swaps ? ps.limiter_sleep_us / 1000.0 / ps.swaps : 0.0,
++            double(gticks) / double(chrono::Clock::guest_tick_frequency()) / window_s);
++        ps = PacingStats{};
++        ps.window_start = ps.last_swap = now;
++        ps.guest_ticks_start = chrono::Clock::QueryGuestTickCount();
++        ps.vblank_start = vblank_counter_.load(std::memory_order_relaxed);
++      }
++    }
 +  }
 +
    IssueSwap(frontbuffer_ptr, frontbuffer_width, frontbuffer_height);
@@ -1174,7 +1516,7 @@ index a744375..09f04be 100644
    return true;
  }
  
-@@ -1206,7 +1254,7 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_SHD(memory::RingBuffer* re
+@@ -1206,7 +1354,7 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_SHD(memory::RingBuffer* re
    uint32_t data_value;
    if ((initiator >> 31) & 0x1) {
      // Write counter (GPU vblank counter?).
@@ -1183,7 +1525,7 @@ index a744375..09f04be 100644
    } else {
      // Write value.
      data_value = value;
-@@ -1282,6 +1330,86 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(memory::RingBuffer* re
+@@ -1282,6 +1430,86 @@ bool CommandProcessor::ExecutePacketType3_EVENT_WRITE_ZPD(memory::RingBuffer* re
    return true;
  }
  
@@ -2388,7 +2730,7 @@ index 2be0e8e..2f583c7 100644
      unsupported_format_features_used_[uint32_t(format)] |=
          is_signed ? kUnsupportedSnormBit : kUnsupportedUnormBit;
 diff --git a/src/graphics/graphics_system.cpp b/src/graphics/graphics_system.cpp
-index 8f2fcb0..7953dfd 100644
+index 8f2fcb0..118b0c7 100644
 --- a/src/graphics/graphics_system.cpp
 +++ b/src/graphics/graphics_system.cpp
 @@ -39,6 +39,11 @@ REXCVAR_DEFINE_BOOL(store_shaders, true, "GPU",
@@ -2414,7 +2756,22 @@ index 8f2fcb0..7953dfd 100644
          uint64_t guest_tick_frequency = chrono::Clock::guest_tick_frequency();
          uint64_t vsync_interval_ticks =
              std::max(uint64_t(1), uint64_t(double(guest_tick_frequency) / refresh_rate_hz));
-@@ -166,7 +175,11 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+@@ -160,13 +169,24 @@ X_STATUS GraphicsSystem::SetupGuestGpu(runtime::FunctionDispatcher* function_dis
+         uint64_t last_frame_time = chrono::Clock::QueryGuestTickCount();
+         while (vsync_worker_running_) {
+           uint64_t current_time = chrono::Clock::QueryGuestTickCount();
+-          uint64_t interval_ticks =
+-              REXCVAR_GET(vsync) ? vsync_interval_ticks : no_vsync_interval_ticks;
++          // HOUSE: the guest-visible vblank only runs at the real refresh rate
++          // in the strict vsync_swap_wait mode. Games that wait on vblank
++          // (Real Steel does) otherwise snap every frame that misses 16.7 ms
++          // to 30 fps - half speed for frame-locked game logic. With the fast
++          // vblank the frame limiter paces the guest, and "vsync" only means
++          // tear-free host presentation.
++          uint64_t interval_ticks = (REXCVAR_GET(vsync) && REXCVAR_GET(vsync_swap_wait))
++                                        ? vsync_interval_ticks
++                                        : no_vsync_interval_ticks;
+           while (current_time - last_frame_time >= interval_ticks) {
              MarkVblank();
              last_frame_time += interval_ticks;
            }
@@ -3652,7 +4009,7 @@ index bd43109..7b2e466 100644
  
  PPCFunc* ResolveIndirectFunction(uint32_t guest_address) {
 diff --git a/src/system/mmio_handler.cpp b/src/system/mmio_handler.cpp
-index 2b93005..870398a 100644
+index 2b93005..e824eef 100644
 --- a/src/system/mmio_handler.cpp
 +++ b/src/system/mmio_handler.cpp
 @@ -13,6 +13,11 @@
@@ -3701,7 +4058,7 @@ index 2b93005..870398a 100644
 +    decoded_out.byte_swap = false;
 +    decoded_out.is_constant = true;
 +    decoded_out.constant_size = 1;
-     ++i;
++    ++i;
 +  } else if (p[i] == 0x0F && p[i + 1] == 0xB6) {
 +    // MOVZX r32, r/m8 (zero-extend byte to dword)
 +    // 0f b6 04 02              movzbl (%rdx,%rax), %eax
@@ -3720,7 +4077,7 @@ index 2b93005..870398a 100644
 +    // 43 88 14 04              movb  %dl, (%r12,%r8)
 +    decoded_out.is_load = false;
 +    decoded_out.byte_swap = false;
-+    ++i;
+     ++i;
 +  } else if (p[i] == 0x8A) {
 +    // MOV r8, m8 (load byte from memory to register)
 +    // 8a 04 02                 movb  %al, (%rdx,%rax)
@@ -3793,7 +4150,37 @@ index 2b93005..870398a 100644
    }
    decoded_out.length = i;
    return true;
-@@ -417,8 +519,41 @@ bool MMIOHandler::ExceptionCallback(arch::Exception* ex) {
+@@ -405,22 +507,70 @@ bool MMIOHandler::ExceptionCallback(arch::Exception* ex) {
+     // Recheck if the pages are still protected (race condition - another thread
+     // clears the watch we just hit).
+     // Do this under the lock so we don't introduce another race condition.
++    //
++    // HOUSE: the recheck now runs only when the callback could not handle the
++    // fault. On Linux QueryProtect parses /proc/self/maps, and running it on
++    // every write-watch fault - under the global lock - stalled the GPU
++    // command thread (~1/3 of its time in Real Steel's arena). If the watch
++    // was already cleared by another thread, the callback simply finds no
++    // watch on the page and its stale-protection recovery restores access, so
++    // the common path needs no host protection query at all.
+     auto lock = global_critical_region_.Acquire();
+-    memory::PageAccess cur_access;
+-    size_t page_length = memory::page_size();
+-    memory::QueryProtect(fault_host_address, page_length, cur_access);
+-    if (cur_access != memory::PageAccess::kNoAccess &&
+-        (!is_write || cur_access != memory::PageAccess::kReadOnly)) {
+-      // Another thread has cleared this watch. Abort.
+-      return true;
+-    }
++    auto watch_already_cleared = [&]() {
++      auto recheck_lock = global_critical_region_.Acquire();
++      memory::PageAccess cur_access;
++      size_t page_length = memory::page_size();
++      if (!memory::QueryProtect(fault_host_address, page_length, cur_access)) {
++        return false;
++      }
++      return cur_access != memory::PageAccess::kNoAccess &&
++             (!is_write || cur_access != memory::PageAccess::kReadOnly);
++    };
      // The address is not found within any range, so either a write watch or an
      // actual access violation.
      if (access_violation_callback_) {
@@ -3804,6 +4191,10 @@ index 2b93005..870398a 100644
 +      bool handled = access_violation_callback_(std::move(lock),
 +                                                access_violation_callback_context_,
 +                                                fault_host_address, is_write);
++      if (!handled && watch_already_cleared()) {
++        // Another thread has cleared this watch. Retry the access.
++        return true;
++      }
 +      if (!handled) {
 +        auto rip = ex->pc();
 +        bool is_null_ptr_fault = (fault_guest_virtual_address < 0x100000u);
@@ -3835,8 +4226,12 @@ index 2b93005..870398a 100644
 +      }
 +      return handled;
      }
-     return false;
+-    return false;
++    lock.unlock();
++    return watch_already_cleared();
    }
+ 
+   auto rip = ex->pc();
 diff --git a/src/system/xam/content_manager.cpp b/src/system/xam/content_manager.cpp
 index bd6c797..0229774 100644
 --- a/src/system/xam/content_manager.cpp
@@ -4358,3 +4753,26 @@ index 23645ef..110e310 100644
      // Limiting the frame rate, but lets too long frames cause tearing not to
      // make the latency even worse.
      swapchain_create_info.presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+diff --git a/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp b/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp
+index 32d427d..aecd5e0 100644
+--- a/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp
++++ b/thirdparty/disruptorplus/include/disruptorplus/blocking_wait_strategy.hpp
+@@ -169,13 +169,16 @@ namespace disruptorplus
+             sequence_t result;
+             {
+                 std::unique_lock<std::mutex> lock(m_mutex);
++                // HOUSE: std::condition_variable::wait_until takes
++                // (lock, deadline, predicate); upstream had the last two
++                // swapped, so this overload never compiled.
+                 m_cv.wait_until(
+                     lock,
++                    timeoutTime,
+                     [&]() -> bool {
+                         result = minimum_sequence_after(sequence, count, sequences);
+                         return difference(result, sequence) >= 0;
+-                    },
+-                    timeoutTime);
++                    });
+             }
+             return result;
+         }

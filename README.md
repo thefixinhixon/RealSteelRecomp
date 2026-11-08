@@ -50,19 +50,25 @@ themed from one codebase — this build wears cage-steel teal):
 - **Settings in four explained sections** (Graphics / Audio / Storage
   & Logs / Advanced), each with a plain-language note on what it does:
   resolution scale, FSR or bilinear presentation, FXAA, MSAA, VSync,
-  frame limit, pipeline threads, audio gain and routing, your choice
-  of save-data and log locations — plus a **Reset to Defaults** button.
+  frame limit, mute, your choice of save-data and log locations — plus
+  a **Reset to Defaults** button. Every setting maps to a flag the
+  runtime actually has.
 - Settings persist between runs; the exact command line assembled for
   every launch is written to `last-command.txt` next to the logs.
 
 Two title-specific defaults worth knowing about, both earned the hard
 way during the port:
 
-- **VSync defaults OFF for this game.** The runtime's vblank pacing
-  made fights run at half speed (menus were fine — only gameplay
-  waits on it that way). The runtime's 60 fps frame limiter still
-  paces the game. You can turn VSync back on in Settings; expect
-  slow-motion robots.
+- **Game speed is the frame rate — keep the frame limit at 60.** Real
+  Steel advances its game logic one step per frame, so 45 fps plays at
+  three-quarter speed and an unlimited frame rate runs menus at 1.5x.
+  The launcher defaults to a 60 fps limit (and migrates older settings
+  that had it at 0). The runtime's limiter schedules exact 1/60 s
+  deadlines, so it holds 60.00, not "about 58".
+- **VSync is safe (and on by default).** It only makes presentation
+  tear-free. Older builds also ran the guest's vblank at the real 60 Hz,
+  which snapped any frame that missed 16.7 ms to 30 fps — half-speed
+  fights; that strict mode is now opt-in (`--vsync_swap_wait=true`).
 - **The launcher always passes
   `--gpu_allow_invalid_fetch_constants=true`.** Real Steel issues
   texture fetches with 'invalid' fetch constants thousands of times
@@ -101,6 +107,36 @@ PipeWire systems. (Ask us how we know.)
 Note: **never mix** the executable and `librexruntime.so` /
 `librexgpu-xenos.so` (or their Windows `.dll` counterparts) from
 different build sets — it corrupts the heap.
+
+## Performance work (house runtime, 2026-11)
+
+The first release was slow in exactly the way a frame-locked game
+shows it: in the 3D arena it rendered ~33 fps, so fights played at
+roughly half speed. Profiling the runtime (headless, `eu-stack`
+sampling, A/B per change on the same scene) found several runtime
+bugs that are fixed in `patches/house-sdk.patch`:
+
+| Fix | Arena fps (headless, uncapped) |
+|---|---|
+| First release | 32.9 |
+| Per-draw vertex-fetch OOB trace off by default (it scanned every index buffer on the GPU thread to print a DEBUG line) | 36.5 |
+| Multi-object waits are event driven (they busy-spun: the audio thread burned a core), register lookup table, timer thread blocks instead of spinning | 43.5 |
+| Write-watch faults no longer parse `/proc/self/maps` under the global lock (it stalled the GPU thread ~1/3 of the time) | 56.0 |
+| Consecutive GPU register writes are batched (as in Xenia-Canary) | **67.7** |
+
+With the 60 fps limiter the arena and fights now hold a locked 60.00
+in the same headless setup (which itself adds ~5 ms per frame), so
+the game runs at its real speed. Pacing fixes: the limiter uses fixed
+deadlines (it used to drift below 60), and VSync no longer drops a
+late frame to 30 fps (see the quirks above).
+
+Diagnostics: `--rs_perf_log=true` logs swaps/s, vblanks/s, frame-time
+average/max and the guest clock rate every 2 s.
+
+Testing: `tools/linux/headless_run.sh` runs the game on a private Xvfb
+display with audio muted and real controllers disabled (see
+`docs/headless.md` and `AGENTS.md`), so it can be tested on a desktop
+that is in use.
 
 ## Known landmine: `/dev/shm` leaks (Linux)
 

@@ -174,9 +174,6 @@ LaunchPlan buildLaunchPlan(const GameProfile &profile,
     args << QStringLiteral("--native_2x_msaa=") + boolValue(settings.native2xMsaa);
     args << QStringLiteral("--async_shader_compilation=") +
             boolValue(settings.asyncShaderCompilation);
-    if (settings.pipelineThreads != 0)
-        args << QStringLiteral("--vulkan_pipeline_creation_threads=") +
-                QString::number(settings.pipelineThreads);
     args << QStringLiteral("--vsync=") + boolValue(settings.vsync);
     // The runtime arg is fullscreen; the UI speaks windowed.
     args << QStringLiteral("--fullscreen=") + boolValue(!settings.windowed);
@@ -184,18 +181,7 @@ LaunchPlan buildLaunchPlan(const GameProfile &profile,
             QString::number(settings.frameLimit);
     //
     // Audio
-    args << QStringLiteral("--audio_output_gain=") +
-            QString::number(settings.audioGain, 'f', 2);
-    args << QStringLiteral("--audio_highpass_hz=") +
-            QString::number(settings.audioHighpassHz);
-    args << QStringLiteral("--audio_force_stereo=") +
-            boolValue(settings.audioForceStereo);
-    args << QStringLiteral("--audio_front_only=") +
-            boolValue(settings.audioFrontOnly);
-    if (settings.audioMaxQFrames != 0)
-        args << QStringLiteral("--audio_maxqframes=") +
-                QString::number(settings.audioMaxQFrames);
-    args << QStringLiteral("--xma_worker=") + boolValue(settings.xmaWorker);
+    args << QStringLiteral("--audio_mute=") + boolValue(settings.audioMute);
     //
     // Advanced. Sparse shared memory stays defaulted off: it
     // black-screens on AMD RADV (RX 6600), which is why both prior

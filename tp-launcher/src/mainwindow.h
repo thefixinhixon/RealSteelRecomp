@@ -66,17 +66,11 @@ private:
     QSpinBox *anisotropicSpin_ = nullptr;
     QCheckBox *nativeMsaaCheck_ = nullptr;
     QCheckBox *asyncShadersCheck_ = nullptr;
-    QSpinBox *pipelineThreadsSpin_ = nullptr;
     QCheckBox *vsyncCheck_ = nullptr;
     QSpinBox *frameLimitSpin_ = nullptr;
     QCheckBox *windowedCheck_ = nullptr;
     // Audio
-    QDoubleSpinBox *audioGainSpin_ = nullptr;
-    QSpinBox *audioHighpassSpin_ = nullptr;
-    QCheckBox *forceStereoCheck_ = nullptr;
-    QCheckBox *frontOnlyCheck_ = nullptr;
-    QSpinBox *audioMaxQFramesSpin_ = nullptr;
-    QCheckBox *xmaWorkerCheck_ = nullptr;
+    QCheckBox *audioMuteCheck_ = nullptr;
     // Storage & logs
     QLineEdit *userDataRootEdit_ = nullptr;
     QPushButton *openDataButton_ = nullptr;

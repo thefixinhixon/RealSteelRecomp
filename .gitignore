@@ -30,3 +30,4 @@ TPSplosionmanLauncher.exe
 # Logs
 *.log
 logs/
+tools/linux/ptracer.so

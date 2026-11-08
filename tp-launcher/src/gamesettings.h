@@ -23,26 +23,25 @@ struct GameSettings {
     int     anisotropic = 16;        // anisotropic_override; 0 = game's own setting
     bool    native2xMsaa = false;    // native_2x_msaa
     bool    asyncShaderCompilation = true; // async_shader_compilation
-    int     pipelineThreads = 0;     // vulkan_pipeline_creation_threads; 0 = runtime default
 #if defined(TP_GAME_REALSTEEL)
-    // Real Steel: the runtime's vsync emulation runs this game's
-    // fights at half speed (proven 2026-10-04), so this build
-    // defaults vsync OFF. The runtime's 60 fps frame limiter still
-    // paces the game. Users can re-enable it in settings.
-    bool    vsync      = false;
+    // Real Steel's game logic advances one step per frame, so game speed
+    // IS the frame rate: the runtime's limiter must hold exactly 60.
+    // VSync is safe again (house runtime 2026-11): it now only makes host
+    // presentation tear-free; it no longer drops a slow frame to 30 fps
+    // (which used to run fights at half speed).
+    bool    vsync      = true;
+    int     frameLimit = 60;   // 60 = correct game speed
 #else
     bool    vsync      = true;
-#endif
     int     frameLimit = 0;    // 0 = unlimited
+#endif
     bool    windowed   = false;
 
     // --- Audio ---
-    double  audioGain  = 1.0;  // Neutral defaults on purpose - not the
-    int     audioHighpassHz = 0; // 0.50 / 100 Hz leftovers from Dante
-    bool    audioForceStereo = false; // audio_force_stereo
-    bool    audioFrontOnly   = false; // audio_front_only
-    int     audioMaxQFrames  = 0;     // audio_maxqframes; 0 = runtime default
-    bool    xmaWorker        = true;  // xma_worker
+    // The runtime has exactly one audio option. (The old gain / highpass /
+    // stereo / queue / XMA-worker settings named flags the runtime does
+    // not have and did nothing; they were removed.)
+    bool    audioMute  = false; // audio_mute
 
     // --- Storage & logs ---
     QString userDataRoot;                        // user_data_root; empty = runtime default
@@ -54,6 +53,10 @@ struct GameSettings {
     bool    asyncSkipIncompleteFrames = false; // vulkan_async_skip_incomplete_frames
     int     userLanguage = 0; // user_language; 0 = runtime default
     int     userCountry  = 0; // user_country; 0 = runtime default
+
+    // Bumped when a stored default is wrong for existing users and must be
+    // migrated (see GameSettings::load()).
+    static constexpr int kSettingsVersion = 2;
 
     static GameSettings load();
     void save() const;
