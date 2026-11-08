@@ -3403,9 +3403,18 @@ index 3593403..bbe184f 100644
    REXKRNL_ERROR(
        "Unimplemented XLIVEBASE message app={:08X}, msg={:08X}, arg1={:08X}, "
 diff --git a/src/kernel/xam/xam_content.cpp b/src/kernel/xam/xam_content.cpp
-index 1fb1e16..6a1df0a 100644
+index 1fb1e16..8c7a108 100644
 --- a/src/kernel/xam/xam_content.cpp
 +++ b/src/kernel/xam/xam_content.cpp
+@@ -141,7 +141,7 @@ u32 xeXamContentCreate(u32 user_index, mapped_string root_name, mapped_void cont
+     *disposition_ptr = 0;
+   }
+ 
+-  auto run = [content_manager, xuid, root_name = root_name.value(), flags, content_data,
++  auto run = [content_manager, xuid, root_name = std::string(root_name.value()), flags, content_data,
+               disposition_ptr,
+               license_mask_ptr](uint32_t& extended_error, uint32_t& length) -> X_RESULT {
+     X_RESULT result = X_ERROR_INVALID_PARAMETER;
 @@ -231,8 +231,11 @@ u32 xeXamContentCreate(u32 user_index, mapped_string root_name, mapped_void cont
  
    if (!overlapped_ptr) {
@@ -3570,6 +3579,32 @@ index 3f1a852..a6e6ed7 100644
        if (io_status_block) {
          io_status_block->status = result;
          io_status_block->information = bytes_read;
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp b/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp
+index bd5de65..45f39fa 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp
+@@ -149,14 +149,13 @@ u32 NtQueryInformationFile_entry(u32 file_handle, ppc_ptr_t<X_IO_STATUS_BLOCK> i
+       break;
+     }
+     case XFileXctdCompressionInformation: {
+-      REXKRNL_ERROR(
+-          "NtQueryInformationFile(XFileXctdCompressionInformation) "
+-          "unimplemented");
+-      // Files that are XCTD compressed begin with the magic 0x0FF512ED but we
+-      // shouldn't detect this that way. There's probably a flag somewhere
+-      // (attributes?) that defines if it's compressed or not.
+-      status = X_STATUS_INVALID_PARAMETER;
+-      out_length = 0;
++      // HOUSE (Bejeweled Blitz Live): report success with the zeroed
++      // struct. Games query this to decide whether a file needs XCTD
++      // decompression; answering INVALID_PARAMETER stalled Bejeweled's
++      // loader threads on a solid screen. Host files in this runtime are
++      // always stored uncompressed, and a zeroed struct reads as
++      // "not compressed".
++      out_length = sizeof(X_FILE_XCTD_COMPRESSION_INFORMATION);
+       break;
+     };
+     case XFileNetworkOpenInformation: {
 diff --git a/src/kernel/xboxkrnl/xboxkrnl_video.cpp b/src/kernel/xboxkrnl/xboxkrnl_video.cpp
 index 1254710..3308c40 100644
 --- a/src/kernel/xboxkrnl/xboxkrnl_video.cpp
@@ -3802,6 +3837,34 @@ index 2b93005..870398a 100644
      }
      return false;
    }
+diff --git a/src/system/xam/content_manager.cpp b/src/system/xam/content_manager.cpp
+index bd6c797..0229774 100644
+--- a/src/system/xam/content_manager.cpp
++++ b/src/system/xam/content_manager.cpp
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include <array>
++#include <algorithm>
+ #include <cstring>
+ #include <queue>
+ #include <string>
+@@ -170,6 +171,15 @@ std::vector<XCONTENT_AGGREGATE_DATA> ContentManager::ListContent(uint32_t device
+     }
+   }
+ 
++  // The console's content system enumerates packages in a stable order,
++  // and games can depend on it (e.g. when merging per-package data in
++  // enumeration order). Host directory iteration order is arbitrary, so
++  // sort by file name to keep enumeration deterministic.
++  std::sort(result.begin(), result.end(),
++            [](const XCONTENT_AGGREGATE_DATA& a, const XCONTENT_AGGREGATE_DATA& b) {
++              return a.file_name() < b.file_name();
++            });
++
+   return result;
+ }
+ 
 diff --git a/src/system/xmemory.cpp b/src/system/xmemory.cpp
 index 76cc877..b0c4004 100644
 --- a/src/system/xmemory.cpp
@@ -4295,29 +4358,3 @@ index 23645ef..110e310 100644
      // Limiting the frame rate, but lets too long frames cause tearing not to
      // make the latency even worse.
      swapchain_create_info.presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
-diff --git a/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp b/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp
-index bd5de65..45f39fa 100644
---- a/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp
-+++ b/src/kernel/xboxkrnl/xboxkrnl_io_info.cpp
-@@ -149,14 +149,13 @@ u32 NtQueryInformationFile_entry(u32 file_handle, ppc_ptr_t<X_IO_STATUS_BLOCK> i
-       break;
-     }
-     case XFileXctdCompressionInformation: {
--      REXKRNL_ERROR(
--          "NtQueryInformationFile(XFileXctdCompressionInformation) "
--          "unimplemented");
--      // Files that are XCTD compressed begin with the magic 0x0FF512ED but we
--      // shouldn't detect this that way. There's probably a flag somewhere
--      // (attributes?) that defines if it's compressed or not.
--      status = X_STATUS_INVALID_PARAMETER;
--      out_length = 0;
-+      // HOUSE (Bejeweled Blitz Live): report success with the zeroed
-+      // struct. Games query this to decide whether a file needs XCTD
-+      // decompression; answering INVALID_PARAMETER stalled Bejeweled's
-+      // loader threads on a solid screen. Host files in this runtime are
-+      // always stored uncompressed, and a zeroed struct reads as
-+      // "not compressed".
-+      out_length = sizeof(X_FILE_XCTD_COMPRESSION_INFORMATION);
-       break;
-     };
-     case XFileNetworkOpenInformation: {
